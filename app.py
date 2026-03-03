@@ -77,8 +77,7 @@ async def start():
 async def handle_message(message: cl.Message):
     """Runs every time the user sends a message."""
 
-    # Each Chainlit session gets a unique thread_id for conversation memory.
-    # user_id is hardcoded for now — in production you'd get this from auth.
+    
     config = {
         "configurable": {
             "thread_id": cl.context.session.id,
