@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "macro-mate"
+version = "0.1.0"
+description = "Nutrition intelligence chatbot — an Agentic RAG app for the AI Engineer Certification Challenge"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # --- LLM + Embeddings ---
+    "langchain-openai",           # ChatOpenAI (GPT-4o-mini) + OpenAIEmbeddings (text-embedding-3-small)
+
+    # --- Orchestration ---
+    "langgraph",                  # StateGraph, ToolNode, MemorySaver, InMemoryStore
+
+    # --- Retrieval ---
+    "langchain",                  # base chains, text splitters
+    "langchain-classic",          # EnsembleRetriever (hybrid retrieval)
+    "langchain-qdrant",           # QdrantVectorStore wrapper
+    "qdrant-client",              # Qdrant vector DB (in-memory mode)
+    "langchain-community",        # BM25Retriever lives here
+    "rank-bm25",                  # BM25 algorithm (required by BM25Retriever)
+
+    # --- Tools ---
+    "langchain-tavily",           # TavilySearch for web search tool
+
+    # --- Data loading ---
+    "pypdf",                      # PyPDFLoader for PDF ingestion
+    "pandas",                     # CSV loading + filtering
+
+    # --- Monitoring ---
+    "langsmith",                  # tracing & evaluation dashboard
+
+    # --- UI ---
+    "chainlit",                   # chat interface
+
+    # --- Text splitters ---
+    "langchain-text-splitters",   # explicit dependency for RecursiveCharacterTextSplitter
+
+    # --- Config ---
+    "python-dotenv",              # load .env files
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",                       # linter + formatter
+    "pytest",                     # testing
+    "ragas",                      # RAG evaluation framework (Task 5)
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/macro_mate"]

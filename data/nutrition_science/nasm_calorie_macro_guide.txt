@@ -1,0 +1,85 @@
+Source: NASM - How to Count Macros The Easy Way to Reach Your Nutrition Goals
+URL: https://blog.nasm.org/how-to-count-macros
+
+If you’re an avid gym user, friends with a bodybuilder, or sat in on a novice nutrition course I’m sure you’ve heard of the term “macros” or “counting macros.” But what is the significance? Do you need to count macros to be healthy? Have no fear, all your questions about macros are about to be answered and you’ll soon be on your way to being a macro counting expert!First, let’s define macros, or macronutrients. Macronutrients are a type of food required in large amounts in the diet and supply the body with energy. The three main macronutrients that make up all foods in our diet are carbohydrates, proteins, and fats.
+
+Making Sense of Macros
+Carbohydrates are sugars, starches, and cellulose that the body breaks down into a molecule called glucose. Glucose is the simplest form of a carbohydrate that your body can use to generate energy. Carbohydrates can be found in fruits, vegetables, grains, legumes, potatoes, milk, and milk products. Carbohydrates are commonly grouped into two categories: simple and complex. Very simply (pun intended), simple carbs are those that contain little fiber, require minimal digestion, and are absorbed rapidly.
+
+Complex carbohydrates typically take longer to digest due to a high fiber content. However, regardless of the type of carbohydrate, all carbohydrates are 4 calories per 1 gram and should make up between 45-65% of your total intake.
+
+Proteins are amino acids that makeup the structure of all tissues in the body (skin, hair, muscles, collagen, etc.), make up enzymes that play a role in energy production, digestion, and muscle contractions, and are the structural components of anti-bodies and chemical messengers. Most importantly, proteins help restore, rebuild, and repair muscle tissues.
+
+Proteins can be found in all animal products such as eggs, milk, fish, chicken, beef, and turkey. Luckily for our vegan and vegetarian friends, proteins can also be found in some vegetables with the highest concentrations existing in soybeans, hemp, and legumes. While protein can provide the body with energy, it is not a preferred fuel source; instead, proteins are mainly used for synthesizing new tissues. Like carbohydrates, protein contains 4 calories per 1 gram and should make up 10-35% of your total daily intake.
+
+Fats are the main storage form of energy in the body, they support cell growth and function, protect our vital organs, are involved in hormone metabolism, and help transport essential vitamins and minerals. Fats can be found in animal meats, dairy products, nuts, seeds, oils, and butters. Fats are also the most calorically dense of all macronutrients, containing 9 calories per 1 gram. It is recommended fats make up 20-35% of your total daily intake.
+
+Alcohol is also counted as a macro because it provides calories but is not an essential nutrient. However, alcohol intake can profoundly affect your health, diet, and performance so it should be considered when counting macronutrients. Alcohol contains 7 calories per 1 gram.
+
+A Macro Look at Micros
+In contrast to macronutrients, micronutrients are nutrients needed in smaller amounts in the diet, such as vitamins and minerals. Unlike macronutrients, micronutrients do not provide direct energy to the body. Instead, they are needed for normal function of various metabolic processes, growth, and development.
+
+So now that we’ve defined macronutrients, listed common sources of each one, and how many calories they contain, let’s review how to calculate them. Counting macronutrients is simply another way of doing easy math to ensure you’re meeting your daily needs — which can be done a couple ways.
+
+One method is by first calculating your daily needs and using the recommended daily percentages to find your personal macronutrient range.
+
+Without direct testing methods, predictive equations must be used in order to estimate daily needs. We can then use these predictive equations to get a base intake or resting metabolic rate (RMR) and multiply the RMR by appropriate activity factors to obtain an estimate for total daily energy needs.
+
+Various prediction equations have been developed for different populations that vary in age, gender, level of obesity, and activity level. For active individuals, research has shown that the most accurate equation is the Cunningham equation. However, this equation requires a direct measurement of fat and muscle mass, therefore, the Harris-Benedict equation is the next best predictor.
+
+Harris Benedict (1919)
+Males: RMR (kcals/day) = 66.47 + 13.75(wt in kg) + 5(ht in cm) - 6.76(age in years)
+Females: RMR (kcals/day) = 655.1 +9.56(wt in kg) + 1.85(ht in cm) - 4.68(age in years)
+
+Once we have RMR, we can apply activity factors to get total daily needs. For example, let’s say your RMR was calculated to be 1600 kcals/day and you participate in moderate exercise 3 days/week.
+
+Activity Factors:
+Sedentary/Little to no exercise - 1.2
+Lightly active (light exercise 1-3 days/week) - 1.375
+Moderately active (moderate exercise 3-5 days/week) - 1.55
+Very active (hard exercise 6-7 days/week) - 1.725
+
+Your total daily needs would average out to be about 2480 kcals/day. Remember, this value is to maintain your current weight! If you are looking to lose or gain weight, you’d increase or decrease this value. However, using this value we can now apply the recommended daily percentages from each macronutrient to get macronutrient ranges in grams.
+
+Example:
+
+45-65% carbohydrates = 0.45(2480) or 0.65(2480) = 1116 or 1612 kcals
+
+Divide answer by 4 since there are 4 calories per 1 gram of carbohydrate.
+
+**1116 kcal/4 kcal= 279 grams or 1612kcal /4kcal = 403grams***
+
+Another strategy is to use recommended macronutrient ranges based on your weight in kilograms to get total daily needs.
+
+For active individuals’ carbohydrate recommendations can range between 3-12g/kg/day; protein recommendations often range between 1.2-2.2g/kg/day; and fat ranges between 0.5-2.5g/kg/day.
+
+For example, let’s say you weigh 150 lb. (68.18 kg). Using the lowest end of each macronutrient range let us calculate total grams for each category.
+
+Carbohydrates: 3g(68.18kg) = ~205g x 4 kcals/g = 820 kcals
+Protein: 1.2g(68.18kg) = ~82g x 4 kcals/g = 327 kcals
+Fat: 0.5g (68.18kg) = ~34g x 9 kcals/g = 306 kcals
+
+Total daily intake = 1453 kcals.
+
+However, the best strategy is using a combination of both methods to understand your minimum daily needs (RMR) and ensuring the macronutrient ranges you are consuming meet those needs.
+
+Laying a Foundation for Health
+Do you need to count macros to be healthy? Absolutely not! However, counting macros can be a helpful tool if you are trying to make some changes to your performance or body composition. Very often for active individuals, it is consuming a specific range of macros versus total calorie intake to achieve desired performance or body composition goals.
+
+For example, protein intakes of 1.6-2.2g/kg are recommended to maximize muscle building. Ranges of 2-2.2g/kg are often recommended for individuals looking to maintain or build muscle in caloric deficits. Another example would be a marathon runner looking to increase their energy levels and prevent fatigue during training. It is often recommended that endurance athletes consume anywhere between 7-13g/kg of carbohydrates depending on their activity level.
+
+So, as you can see, you can use “macros” as a guide to help achieve desired performance or body composition outcomes instead of solely relying on daily energy needs.
+
+Overall, counting macros is a useful tool to ensure you’re getting a healthy balance of carbohydrates, proteins, and fats in your diet. Simple math can easily help you determine how many grams and calories of each macronutrient you need per day. Let’s recap:
+
+Carbohydrates:
+- 4 calories per 1 gram
+- Recommended to make up 45-65% of total daily intake or 3-12g/kg/day
+
+Protein:
+- 4 calories per 1 gram
+- Recommended to make up 10-35% of total daily intake or 1.2-2.2g/kg/day
+
+Fats:
+- 9 calories per 1 gram
+- Recommended to make up 20-35% of total daily intake or 0.5-2.5g/kg/day

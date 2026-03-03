@@ -1,0 +1,48 @@
+Source: MedicineNet - Which Calorie Calculator is Most Accurate?
+
+URL: https://www.medicinenet.com/which_calorie_calculator_is_most_accurate/article.htm
+
+Which Calorie Calculator is Most Accurate?
+
+Calorie calculators widely use the Mifflin-St Jeor equation to determine resting metabolic rate (RMR) because it has been shown to be the most accurate. RMR is the amount of energy expended at rest (resting energy expenditure or REE). 
+
+There are other equations that can measure RMR—for example, the well-known Harris-Benedict equation. A comparison among four predictive equations revealed that the Mifflin-St Jeor equation was more reliable than other equations. It can accurately predict RMR to within 10% of the value measured.
+
+
+How does the Mifflin-St Jeor formula work?
+The Mifflin-St Jeor formula is as follows:
+
+Women: (10 * weight [kg]) + (6.25 * height [cm]) - (5 * age [years]) - 161
+Men: (10 * weight [kg]) + (6.25 * height [cm]) - (5 * age [years]) + 5
+Multiply by scale factor for activity level:
+
+Sedentary: 1.2
+Lightly active: 1.375
+Moderately active: 1.55
+Active: 1.725
+Very active: 1.9
+
+What is your resting metabolic rate?
+Resting metabolic rate (RMR) refers to the number of calories burned at rest. It is proportional to body mass and reduces approximately 0.01 kcal/min per 1% increase in body fat.
+
+RMR is one of the three components of total daily energy expenditure or metabolism. Metabolism refers to the bodily processes to sustain life. The other two components of metabolism include:
+
+Thermic effect of food (TEF): The energy cost of chewing, swallowing, digesting, absorbing, and storing food.
+Thermic effect of physical activity (TEPA): The energy cost of activity (exercise and physical activity) and non-exercise activity thermogenesis (NEAT)such as standing, fidgeting, and moving about.
+
+What is the difference between RMR and BMR?
+Basal metabolic rate (BMR) is the minimum calories required for basic (life-sustaining) functions at rest, whereas RMR is the number of calories burned by the body while resting. Both BMR and RMR are used interchangeably.
+
+BMR and RMR are essential components of a calorie calculator and can help weight watchers to track their weight.
+
+
+What is the most popular calorie calculator app?
+My Fitness Pal is regarded as the most accurate and popular calorie calculator. Some of the features of the My Fitness Pal calculator include the following:
+
+Tracks weight and calculates a recommended daily calorie intake
+Includes a food diary and an exercise log
+Provides a clear picture of the total calories consumed and burned as well as the remaining recommended intake
+Offers chat forums with fellow users
+Options to download recipes or create custom foods and dishes
+Bar code scanner that allows entering the nutritional information of some packaged food instantly
+Presents a pie chart showing a daily breakdown of your carbohydrate, protein, and fat intake
