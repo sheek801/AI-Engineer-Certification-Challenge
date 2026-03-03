@@ -4,7 +4,7 @@ An Agentic RAG application that helps users track nutrition, explore recipes, lo
 
 ## Demo Video
 
-[Loom Video Link]((https://www.loom.com/share/2fdde32dfa1540ada88812bca2a3e414))
+[Loom Video Link](https://www.loom.com/share/2fdde32dfa1540ada88812bca2a3e414)
 
 ## Project Overview
 
