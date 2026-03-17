@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "macro-mate"
+name = "macromind"
 version = "0.1.0"
 description = "Nutrition intelligence chatbot — an Agentic RAG app for the AI Engineer Certification Challenge"
 readme = "README.md"
@@ -25,6 +25,7 @@ dependencies = [
 
     # --- Tools ---
     "langchain-tavily",           # TavilySearch for web search tool
+    "requests",                   # HTTP client for USDA FoodData Central API
 
     # --- Data loading ---
     "pypdf",                      # PyPDFLoader for PDF ingestion
@@ -35,9 +36,13 @@ dependencies = [
 
     # --- UI ---
     "chainlit",                   # chat interface
+    "plotly",                     # interactive charts for dashboard view
 
     # --- Text splitters ---
     "langchain-text-splitters",   # explicit dependency for RecursiveCharacterTextSplitter
+
+    # --- Persistent memory ---
+    "sqlite-vec",                 # vector search in SQLite (persistent user store)
 
     # --- Config ---
     "python-dotenv",              # load .env files

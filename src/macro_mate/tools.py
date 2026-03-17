@@ -1,4 +1,4 @@
-"""Agent tools — the six capabilities that make Macro Mate useful.
+"""Agent tools — the seven capabilities that make MacroMind useful.
 
 Each tool is a function decorated with @tool. The agent decides WHEN to
 call them based on the user's message and the tool docstrings.
@@ -7,22 +7,22 @@ The tools are created inside a factory function (create_tools) so they
 can close over the retriever and store references — a Python closure.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from langchain_core.tools import tool
 from langchain_classic.retrievers import EnsembleRetriever
 from langchain_tavily import TavilySearch
-from langgraph.store.memory import InMemoryStore
+from langgraph.store.base import BaseStore
 
 
-def create_tools(retriever: EnsembleRetriever, store: InMemoryStore) -> list:
-    """Factory that builds all 6 agent tools.
+def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
+    """Factory that builds all 7 agent tools.
 
     Args:
         retriever: The EnsembleRetriever from retrievers.py.
-        store: The InMemoryStore from memory.py.
+        store: The persistent store (PersistentStore or any BaseStore).
 
     Returns:
-        A list of 6 tool functions to bind to the LLM.
+        A list of 7 tool functions to bind to the LLM.
     """
 
     # ═══════════════════════════════════════════════════════════════════
@@ -142,8 +142,30 @@ def create_tools(retriever: EnsembleRetriever, store: InMemoryStore) -> list:
             "timestamp": now.isoformat(),
         })
 
+        # ── Update logging streak ──────────────────────────────────
+        today_str = now.strftime("%Y-%m-%d")
+        yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        streak_items = list(store.search((user_id, "streaks")))
+        current_streak = streak_items[0].value if streak_items else {
+            "count": 0, "last_log_date": "", "longest": 0
+        }
+        last_date = current_streak.get("last_log_date", "")
+
+        if last_date == today_str:
+            count = current_streak["count"]  # Already logged today
+        elif last_date == yesterday_str:
+            count = current_streak["count"] + 1
+        else:
+            count = 1
+
+        longest = max(count, current_streak.get("longest", 0))
+        store.put((user_id, "streaks"), "current", {
+            "count": count, "last_log_date": today_str, "longest": longest,
+        })
+
+        streak_msg = f" | Streak: {count} day(s)" if count > 1 else ""
         return (f"Logged {food_name} ({meal_type}): {calories} cal, "
-                f"{protein_g}g protein, {carbs_g}g carbs, {fat_g}g fat")
+                f"{protein_g}g protein, {carbs_g}g carbs, {fat_g}g fat{streak_msg}")
 
     # ═══════════════════════════════════════════════════════════════════
     # Tool 4 — Manage user profile
@@ -297,6 +319,15 @@ def create_tools(retriever: EnsembleRetriever, store: InMemoryStore) -> list:
             summary += (f"\n  TDEE target: {round(tdee)}\n"
                         f"  Remaining:  {round(remaining)} cal")
 
+        # ── Append streak info ────────────────────────────────────
+        streak_items = list(store.search((user_id, "streaks")))
+        if streak_items:
+            s = streak_items[0].value
+            count = s.get("count", 0)
+            longest = s.get("longest", 0)
+            if count > 0:
+                summary += f"\n  Streak: {count} day(s) (Best: {longest})"
+
         return summary
 
     # ═══════════════════════════════════════════════════════════════════
@@ -393,7 +424,87 @@ def create_tools(retriever: EnsembleRetriever, store: InMemoryStore) -> list:
 
         return "\n".join(sections)
 
-    # ─── Return all 6 tools ──────────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════════
+    # Tool 7 — USDA FoodData Central lookup
+    # ═══════════════════════════════════════════════════════════════════
+
+    @tool
+    def search_usda_foods(query: str) -> str:
+        """Search the USDA FoodData Central database for detailed,
+        verified nutrition information about any food item.
+
+        Use this tool when:
+        - The user asks for exact macros of a specific food (not a restaurant item)
+        - You need precise, USDA-verified nutrition data
+        - The knowledge base doesn't have detailed macros for a food
+
+        Do NOT use for restaurant menu items (use search_nutrition_knowledge
+        or search_web for those).
+
+        Args:
+            query: Name of the food to search for (e.g. "chicken breast",
+                   "banana", "brown rice").
+        """
+        import requests
+        from macro_mate.config import USDA_API_KEY
+
+        if not USDA_API_KEY:
+            return "USDA API key not configured. Set USDA_API_KEY in .env."
+
+        url = "https://api.nal.usda.gov/fdc/v1/foods/search"
+        params = {
+            "api_key": USDA_API_KEY,
+            "query": query,
+            "pageSize": 3,
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            return f"Error querying USDA API: {e}"
+
+        foods = data.get("foods", [])
+        if not foods:
+            return f"No results found for '{query}' in USDA FoodData Central."
+
+        results = []
+        for i, food in enumerate(foods[:3]):
+            name = food.get("description", "Unknown")
+            nutrients = {}
+            for nutrient in food.get("foodNutrients", []):
+                n_name = nutrient.get("nutrientName", "")
+                n_value = nutrient.get("value", 0)
+                n_unit = nutrient.get("unitName", "")
+                if "Energy" in n_name and n_unit == "KCAL":
+                    nutrients["calories"] = f"{n_value} kcal"
+                elif "Protein" in n_name:
+                    nutrients["protein"] = f"{n_value}g"
+                elif "Carbohydrate" in n_name:
+                    nutrients["carbs"] = f"{n_value}g"
+                elif n_name == "Total lipid (fat)":
+                    nutrients["fat"] = f"{n_value}g"
+                elif "Fiber" in n_name:
+                    nutrients["fiber"] = f"{n_value}g"
+                elif "Sugars, total" in n_name:
+                    nutrients["sugar"] = f"{n_value}g"
+                elif "Sodium" in n_name:
+                    nutrients["sodium"] = f"{n_value}mg"
+
+            serving = food.get("servingSize", "")
+            serving_unit = food.get("servingSizeUnit", "")
+            serving_str = f" (per {serving}{serving_unit})" if serving else " (per 100g)"
+
+            nutrient_lines = [f"    {k}: {v}" for k, v in nutrients.items()]
+            results.append(
+                f"[USDA Result {i+1}]: {name}{serving_str}\n"
+                + "\n".join(nutrient_lines)
+            )
+
+        return "\n\n".join(results)
+
+    # ─── Return all 7 tools ──────────────────────────────────────────
 
     return [
         search_nutrition_knowledge,
@@ -402,4 +513,5 @@ def create_tools(retriever: EnsembleRetriever, store: InMemoryStore) -> list:
         manage_user_profile,
         calculate_daily_summary,
         analyze_progress,
+        search_usda_foods,
     ]

@@ -1,1 +1,1 @@
-"""Macro Mate — a nutrition intelligence chatbot powered by Agentic RAG."""
+"""MacroMind — a nutrition intelligence chatbot powered by Agentic RAG."""

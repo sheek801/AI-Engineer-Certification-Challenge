@@ -112,7 +112,7 @@ def run_evaluation(mode: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate Macro Mate retrieval")
+    parser = argparse.ArgumentParser(description="Evaluate MacroMind retrieval")
     parser.add_argument(
         "--mode",
         choices=["dense", "ensemble"],

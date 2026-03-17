@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.env
+*.db
+*.db-wal
+*.db-shm
+*.egg-info/
+dist/
+build/
+eval/
+tests/
+.DS_Store
+.chainlit/.cache/

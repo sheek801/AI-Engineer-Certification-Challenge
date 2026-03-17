@@ -1,14 +1,21 @@
-# Welcome to Chainlit! 🚀🤖
+# Welcome to MacroMind
 
-Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+**Your AI-powered nutrition intelligence assistant.**
 
-## Useful Links 🔗
+MacroMind helps you take control of your nutrition with personalized tracking, science-backed advice, and intelligent meal logging — all through a simple conversation.
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+### What can MacroMind do?
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+- **Log meals** — Just tell me what you ate and I'll track the calories and macros
+- **Set your profile** — Enter your biometrics and I'll calculate your daily calorie target (TDEE)
+- **Get daily summaries** — See how your intake stacks up against your goals
+- **Search nutrition science** — Ask about dietary guidelines, protein needs, weight loss strategies
+- **Find recipes** — Discover high-protein, low-calorie meals that fit your goals
+- **Check fast food macros** — Know exactly what you're getting at McDonald's, Taco Bell, and more
+- **Track your streak** — Build consistency by logging meals every day
 
-## Welcome screen
+### Getting Started
 
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+1. **Set up your profile** — Tell me your weight, height, age, sex, and activity level
+2. **Log a meal** — Describe what you ate and I'll record the nutrition info
+3. **Check the dashboard** — Switch to Dashboard mode to see your charts and progress

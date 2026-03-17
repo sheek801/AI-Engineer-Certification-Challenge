@@ -1,4 +1,4 @@
-# Macro Mate: Nutrition Intelligence Chatbot
+# MacroMind: Nutrition Intelligence Chatbot
 
 An Agentic RAG application that helps users track nutrition, explore recipes, look up restaurant macros, and receive personalized dietary guidance. Built for the AI Maker Space AI Engineering Certification Challenge (AIE9, Cohort 9).
 
@@ -8,7 +8,7 @@ An Agentic RAG application that helps users track nutrition, explore recipes, lo
 
 ## Project Overview
 
-Macro Mate is a conversational nutrition assistant powered by a LangGraph ReAct agent. It combines a curated knowledge base of nutrition science documents, 75 recipes from Food.com, and 515 fast food menu items into a single retrieval pipeline. Users can ask nutrition questions, get recipe suggestions with macro breakdowns, log meals, set up biometric profiles, and calculate their Total Daily Energy Expenditure (TDEE).
+MacroMind is a conversational nutrition assistant powered by a LangGraph ReAct agent. It combines a curated knowledge base of nutrition science documents, 75 recipes from Food.com, and 515 fast food menu items into a single retrieval pipeline. Users can ask nutrition questions, get recipe suggestions with macro breakdowns, log meals, set up biometric profiles, and calculate their Total Daily Energy Expenditure (TDEE).
 
 The retriever uses an EnsembleRetriever that fuses BM25 keyword search with dense vector retrieval through reciprocal rank fusion, outperforming a dense-only baseline on context recall (+8%) and factual correctness (+10%) as measured by the RAGAS evaluation framework.
 
@@ -138,7 +138,7 @@ The EnsembleRetriever delivers improved context recall and factual correctness a
 
 ## Sample Queries
 
-Try these queries to explore the full range of Macro Mate's capabilities:
+Try these queries to explore the full range of MacroMind's capabilities:
 
 ```
 # Nutrition science (retrieves from PDFs/TXTs)

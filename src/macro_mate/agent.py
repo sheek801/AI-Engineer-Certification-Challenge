@@ -47,10 +47,10 @@ class MacroMateState(TypedDict):
 # ═══════════════════════════════════════════════════════════════════════
 
 def build_graph(tools: list, checkpointer=None, store=None):
-    """Construct and compile the Macro Mate agent graph.
+    """Construct and compile the MacroMind agent graph.
 
     Args:
-        tools: The list of 6 tools from tools.py.
+        tools: The list of 7 tools from tools.py.
         checkpointer: MemorySaver for short-term memory.
         store: InMemoryStore for long-term memory.
 
@@ -69,7 +69,9 @@ def build_graph(tools: list, checkpointer=None, store=None):
     # It returns {"messages": [response]} which add_messages appends
     # to the existing conversation history in the state.
     def assistant_node(state: MacroMateState):
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+        user_id = state.get("user_id", "default_user")
+        prompt = SYSTEM_PROMPT + f"\n\nCurrent user_id: {user_id}"
+        messages = [SystemMessage(content=prompt)] + state["messages"]
         response = llm_with_tools.invoke(messages)
         return {"messages": [response]}
 

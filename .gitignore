@@ -17,5 +17,10 @@ __pycache__/
 dist/
 build/
 
+# SQLite databases (user data — don't commit)
+*.db
+*.db-wal
+*.db-shm
+
 # Chainlit cache
 .chainlit/.cache/
