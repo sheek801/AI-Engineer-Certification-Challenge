@@ -2,7 +2,8 @@
 
 Run with:  chainlit run app.py
 
-Two modes:
+Three flows:
+  - Onboarding: new users set up their profile (weight, height, age, sex, activity)
   - Chat: conversational agent with 7 nutrition tools
   - Dashboard: visual charts of calories, macros, and progress
 """
@@ -12,6 +13,7 @@ import logging
 from datetime import datetime
 
 import chainlit as cl
+from chainlit.input_widget import Select, NumberInput
 from langchain_core.messages import HumanMessage
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,7 @@ from macro_mate.retrievers import create_ensemble_retriever
 from macro_mate.memory import create_checkpointer, create_memory_store
 from macro_mate.tools import create_tools
 from macro_mate.agent import build_graph
+from macro_mate.utils import calculate_tdee
 
 # ── Module-level variables set during startup ─────────────────────────
 agent = None
@@ -63,23 +66,203 @@ async def chat_profiles(current_user: cl.User | None):
             markdown_description="Talk to MacroMind — log meals, ask questions, get insights",
             icon="https://cdn-icons-png.flaticon.com/512/1041/1041916.png",
             default=True,
-            starters=[
-                cl.Starter(label="Log a Meal", message="I need to log a meal", icon="https://cdn-icons-png.flaticon.com/512/1046/1046857.png"),
-                cl.Starter(label="Daily Summary", message="Show my daily summary", icon="https://cdn-icons-png.flaticon.com/512/3596/3596091.png"),
-                cl.Starter(label="Set Up Profile", message="Help me set up my profile", icon="https://cdn-icons-png.flaticon.com/512/1077/1077114.png"),
-                cl.Starter(label="Analyze Progress", message="Analyze my nutrition progress", icon="https://cdn-icons-png.flaticon.com/512/3281/3281289.png"),
-            ],
         ),
         cl.ChatProfile(
             name="Dashboard",
             markdown_description="View your nutrition dashboard with charts and stats",
             icon="https://cdn-icons-png.flaticon.com/512/1828/1828791.png",
-            starters=[
-                cl.Starter(label="Refresh Dashboard", message="Show my dashboard", icon="https://cdn-icons-png.flaticon.com/512/3596/3596091.png"),
-                cl.Starter(label="Switch to Chat", message="Let me talk to MacroMind", icon="https://cdn-icons-png.flaticon.com/512/1041/1041916.png"),
-            ],
         ),
     ]
+
+
+# ── Starters (standalone, profile-aware) ──────────────────────────────
+
+@cl.set_starters
+async def starters(current_user: cl.User | None, language: str | None = None):
+    try:
+        profile = cl.user_session.get("chat_profile")
+    except Exception:
+        profile = "Chat"
+    if profile == "Dashboard":
+        return []
+    return [
+        cl.Starter(
+            label="Log a Meal",
+            message="I need to log a meal",
+            icon="https://cdn-icons-png.flaticon.com/512/1046/1046857.png",
+        ),
+        cl.Starter(
+            label="Daily Summary",
+            message="Show my daily summary",
+            icon="https://cdn-icons-png.flaticon.com/512/3596/3596091.png",
+        ),
+        cl.Starter(
+            label="Update Profile",
+            message="Help me update my profile",
+            icon="https://cdn-icons-png.flaticon.com/512/1077/1077114.png",
+        ),
+        cl.Starter(
+            label="Analyze Progress",
+            message="Analyze my nutrition progress",
+            icon="https://cdn-icons-png.flaticon.com/512/3281/3281289.png",
+        ),
+    ]
+
+
+# ── Onboarding ────────────────────────────────────────────────────────
+
+def _check_profile_complete(user_id: str) -> bool:
+    """Return True if the user has all required profile fields."""
+    if _store is None:
+        return False
+    profile_items = list(_store.search((user_id, "profile")))
+    profile = {item.key: item.value.get("value", "") for item in profile_items}
+    required = {"weight_kg", "height_cm", "age", "sex", "activity_level"}
+    return all(f in profile for f in required)
+
+
+async def _show_onboarding_settings():
+    """Show the profile setup form as a ChatSettings panel."""
+    settings = cl.ChatSettings([
+        Select(
+            id="units",
+            label="Units",
+            values=["Imperial (lbs, in)", "Metric (kg, cm)"],
+            initial_index=0,
+            description="Choose your preferred measurement system",
+        ),
+        NumberInput(
+            id="weight",
+            label="Weight",
+            placeholder="e.g. 165 (lbs) or 75 (kg)",
+            description="Your current body weight",
+        ),
+        NumberInput(
+            id="height",
+            label="Height",
+            placeholder="e.g. 70 (inches) or 178 (cm)",
+            description="Your height — for inches: 5'10\" = 70",
+        ),
+        NumberInput(
+            id="age",
+            label="Age",
+            placeholder="e.g. 30",
+            description="Your age in years",
+        ),
+        Select(
+            id="sex",
+            label="Biological Sex",
+            values=["Male", "Female"],
+            initial_index=0,
+            description="Used for calorie calculation (Mifflin-St Jeor)",
+        ),
+        Select(
+            id="activity",
+            label="Activity Level",
+            values=[
+                "Sedentary (desk job, little exercise)",
+                "Light (exercise 1-3 days/week)",
+                "Moderate (exercise 3-5 days/week)",
+                "Active (exercise 6-7 days/week)",
+                "Very Active (intense daily training)",
+            ],
+            initial_index=2,
+            description="How active are you on a typical week?",
+        ),
+    ])
+    await settings.send()
+
+
+def _process_onboarding(settings: dict, user_id: str) -> str | None:
+    """Validate settings, convert units, store profile, return error or None."""
+    units = settings.get("units", "Imperial (lbs, in)")
+    is_imperial = "Imperial" in units
+
+    # ── Validate ──────────────────────────────────────────────────
+    weight_raw = settings.get("weight")
+    height_raw = settings.get("height")
+    age_raw = settings.get("age")
+
+    if not weight_raw or not height_raw or not age_raw:
+        return "Please fill in **all** fields (weight, height, age) then click Confirm again."
+
+    try:
+        weight_val = float(weight_raw)
+        height_val = float(height_raw)
+        age_val = int(float(age_raw))
+    except (ValueError, TypeError):
+        return "Weight, height, and age must be numbers. Please correct and try again."
+
+    if weight_val <= 0 or height_val <= 0 or age_val <= 0:
+        return "Values must be positive numbers. Please correct and try again."
+
+    # ── Convert to metric ─────────────────────────────────────────
+    if is_imperial:
+        weight_kg = round(weight_val / 2.20462, 1)   # lbs → kg
+        height_cm = round(height_val * 2.54, 1)       # inches → cm
+    else:
+        weight_kg = round(weight_val, 1)
+        height_cm = round(height_val, 1)
+
+    sex_raw = settings.get("sex", "Male")
+    sex = sex_raw.lower()
+
+    activity_raw = settings.get("activity", "Moderate (exercise 3-5 days/week)")
+    activity_map = {
+        "Sedentary": "sedentary",
+        "Light": "light",
+        "Moderate": "moderate",
+        "Active": "active",
+        "Very Active": "very_active",
+    }
+    activity = "moderate"
+    for label, key in activity_map.items():
+        if activity_raw.startswith(label):
+            activity = key
+            break
+
+    # ── Calculate TDEE ────────────────────────────────────────────
+    bmr, tdee = calculate_tdee(weight_kg, height_cm, age_val, sex, activity)
+
+    # ── Store in PersistentStore ──────────────────────────────────
+    ns = (user_id, "profile")
+    _store.put(ns, "weight_kg", {"value": str(weight_kg)})
+    _store.put(ns, "height_cm", {"value": str(height_cm)})
+    _store.put(ns, "age", {"value": str(age_val)})
+    _store.put(ns, "sex", {"value": sex})
+    _store.put(ns, "activity_level", {"value": activity})
+    _store.put(ns, "tdee", {"value": str(round(tdee))})
+    # Store unit preference for display
+    _store.put(ns, "units", {"value": "imperial" if is_imperial else "metric"})
+
+    # ── Build confirmation ────────────────────────────────────────
+    if is_imperial:
+        w_display = f"{weight_val} lbs ({weight_kg} kg)"
+        h_display = f"{height_val} in ({height_cm} cm)"
+    else:
+        w_display = f"{weight_kg} kg"
+        h_display = f"{height_cm} cm"
+
+    cl.user_session.set("onboarding_complete", True)
+    return None  # success — no message needed
+
+
+@cl.on_settings_update
+async def on_settings_update(settings: dict):
+    """Called when the user submits the profile settings form.
+
+    Saves silently so starter buttons are NOT cleared.
+    """
+    user = cl.user_session.get("user")
+    user_id = user.identifier if user else "default_user"
+
+    if _store is None:
+        return
+
+    result = _process_onboarding(settings, user_id)
+    if result is not None:
+        # Validation error — must notify the user
+        await cl.Message(content=result).send()
 
 
 # ── Dashboard rendering ──────────────────────────────────────────────
@@ -212,43 +395,52 @@ async def render_dashboard(user_id: str):
     )
 
     if not elements:
-        dashboard_md += "\n*Log some meals to see your charts! Switch to Chat mode to get started.*"
+        dashboard_md += "\n*Log some meals to see your charts! Switch to Chat mode to get started.*\n"
+
+    dashboard_md += "\n---\n*Switch to **Chat** using the profile selector at the top to log meals or ask questions.*"
 
     await cl.Message(content=dashboard_md, elements=elements).send()
 
 
 # ── Main startup ──────────────────────────────────────────────────────
 
+async def _ensure_agent():
+    """Lazy-init the agent pipeline. No messages sent — safe for starters."""
+    global agent, _store
+    if agent is not None:
+        return
+    documents = load_all_documents()
+    vector_store = create_vector_store(documents)
+    retriever = create_ensemble_retriever(vector_store, documents)
+    checkpointer = create_checkpointer()
+    _store = create_memory_store()
+    tools = create_tools(retriever, _store)
+    agent = build_graph(tools, checkpointer=checkpointer, store=_store)
+
+
 @cl.on_chat_start
 async def start():
-    """Runs once when a user opens the chat. Sets up the full pipeline.
+    """Runs once when a user opens the chat or switches profiles.
 
-    IMPORTANT: We do NOT send any messages here.  Sending a message in
-    on_chat_start immediately clears Chainlit's starter buttons, which
-    is why they used to flash and disappear.  By staying silent, we let
-    chainlit.md serve as the welcome content and the starter buttons
-    remain visible until the user clicks one or types a message.
+    CRITICAL: Never send cl.Message here — it clears starter buttons.
+    Agent initialization is deferred to first message via _ensure_agent().
     """
-    global agent, _store
+    # Silently init the agent (no message sent → starters persist)
+    await _ensure_agent()
 
-    if agent is None:
-        # Lazy-init happens once on cold start. We still show a loading
-        # message here because the user will otherwise stare at a blank
-        # screen for 10-15 seconds. This only fires on the very first
-        # request after a deploy — subsequent profile switches skip it.
-        status = cl.Message(content="Setting up MacroMind — this takes a moment on first launch...")
-        await status.send()
+    user = cl.user_session.get("user")
+    user_id = user.identifier if user else "default_user"
+    chat_profile = cl.user_session.get("chat_profile")
 
-        documents = load_all_documents()
-        vector_store = create_vector_store(documents)
-        retriever = create_ensemble_retriever(vector_store, documents)
-        checkpointer = create_checkpointer()
-        _store = create_memory_store()
-        tools = create_tools(retriever, _store)
-        agent = build_graph(tools, checkpointer=checkpointer, store=_store)
+    # ── Dashboard mode: render immediately, no chat ────────────────
+    if chat_profile == "Dashboard":
+        await render_dashboard(user_id)
+        return
 
-    # Don't send any messages — chainlit.md + starters handle the welcome.
-    # Starters persist until the user clicks one or types a message.
+    # ── Chat mode ──────────────────────────────────────────────────
+    # Register the settings form so users can set/update their
+    # profile via the gear icon.  chainlit.md serves as welcome.
+    await _show_onboarding_settings()
 
 
 @cl.on_message
@@ -259,9 +451,6 @@ async def handle_message(message: cl.Message):
     profile = cl.user_session.get("chat_profile")
 
     # ── Dashboard mode ────────────────────────────────────────────
-    # Any message in Dashboard mode renders the dashboard, EXCEPT
-    # if the user asks to switch to Chat (we guide them to the
-    # profile selector instead).
     if profile == "Dashboard":
         lower = message.content.lower()
         if any(kw in lower for kw in ["chat", "talk", "macromind"]):

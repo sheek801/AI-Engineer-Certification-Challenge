@@ -2,20 +2,25 @@
  * MacroMind: Hide the chat composer in Dashboard mode.
  *
  * The body.dashboard-mode class is toggled by dashboard_mode.js.
- * We target the input area broadly to handle Chainlit's generated
- * class names which change between versions.
+ * Targets elements by their stable IDs assigned by Chainlit.
  */
 
-/* Hide the entire message composer area */
-body.dashboard-mode textarea,
-body.dashboard-mode [class*="composer"],
-body.dashboard-mode [class*="input-container"],
-body.dashboard-mode [class*="chat-input"],
-body.dashboard-mode form:has(textarea) {
+/* Hide the composer box (contains textarea, attach button, send button) */
+body.dashboard-mode #message-composer {
   display: none !important;
 }
 
-/* Also hide the bottom bar that contains the composer */
-body.dashboard-mode > div > div > div:last-child:has(textarea) {
+/* Hide the chat input textarea directly */
+body.dashboard-mode #chat-input {
+  display: none !important;
+}
+
+/* Hide the file upload drop input */
+body.dashboard-mode #upload-drop-input {
+  display: none !important;
+}
+
+/* Hide the wrapper that contains the composer and disclaimer */
+body.dashboard-mode div.flex.flex-col.mx-auto.w-full.p-4.pt-0:has(#message-composer) {
   display: none !important;
 }

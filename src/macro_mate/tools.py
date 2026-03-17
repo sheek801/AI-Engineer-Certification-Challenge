@@ -13,6 +13,8 @@ from langchain_classic.retrievers import EnsembleRetriever
 from langchain_tavily import TavilySearch
 from langgraph.store.base import BaseStore
 
+from macro_mate.utils import calculate_tdee
+
 
 def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
     """Factory that builds all 7 agent tools.
@@ -242,29 +244,15 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
             height = float(profile["height_cm"])
             age = float(profile["age"])
             sex = profile["sex"].lower()
-
-            if sex == "male":
-                bmr = 10 * weight + 6.25 * height - 5 * age + 5
-            else:
-                bmr = 10 * weight + 6.25 * height - 5 * age - 161
-
-            activity_factors = {
-                "sedentary": 1.2,
-                "light": 1.375,
-                "moderate": 1.55,
-                "active": 1.725,
-                "very_active": 1.9,
-            }
             activity = profile.get("activity_level", "moderate")
-            factor = activity_factors.get(activity, 1.55)
-            tdee = bmr * factor
+
+            bmr, tdee = calculate_tdee(weight, height, age, sex, activity)
 
             # Store the calculated TDEE so Tool 5 can reference it
             store.put(namespace, "tdee", {"value": str(round(tdee))})
 
             return (f"TDEE: {round(tdee)} calories/day "
-                    f"(BMR: {round(bmr)}, activity: {activity}, "
-                    f"factor: {factor})")
+                    f"(BMR: {round(bmr)}, activity: {activity})")
 
         return "Unknown action. Use 'get', 'set', or 'tdee'."
 

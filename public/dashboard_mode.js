@@ -1,62 +1,52 @@
 /**
  * MacroMind: Hide the chat composer when the Dashboard profile is active.
  *
- * Chainlit doesn't expose the active profile as a DOM attribute, so we
- * use a MutationObserver to watch for profile-related UI changes and
- * toggle a body class that CSS can target.
+ * Two detection strategies:
+ *   1. Content-based: look for "MacroMind Dashboard" in rendered messages.
+ *   2. Profile selector: scan buttons for the active "Dashboard" profile name.
+ *
+ * Toggles a body class that CSS targets to hide the composer.
  */
 (function () {
   "use strict";
 
-  let currentMode = null;
+  var currentMode = null;
 
   function detectAndApply() {
-    // Strategy: The Chainlit profile selector renders the active profile
-    // name as text inside a button or similar control.  We look for the
-    // profile names we defined ("Chat" / "Dashboard") in clickable
-    // elements near the top of the page.  The active profile is shown
-    // in the header area.
-    //
-    // We also check if the page contains our dashboard markdown heading
-    // as a fallback signal.
+    var isDashboard = false;
 
-    let isDashboard = false;
-
-    // Method 1: Look for the profile selector — it's typically a
-    // button/div in the header that shows the current profile name.
-    // Chainlit renders it with a specific aria pattern.
-    const headerEls = document.querySelectorAll(
-      'header button, header [role="button"], nav button, nav [role="button"]'
+    // Method 1 (primary): Check rendered message content for dashboard heading.
+    // render_dashboard() always produces "MacroMind Dashboard".
+    var allEls = document.querySelectorAll(
+      '[class*="message"], [class*="step"], [class*="markdown"], h2'
     );
-    for (const el of headerEls) {
-      const text = (el.textContent || "").trim();
-      if (text === "Dashboard") {
+    for (var i = 0; i < allEls.length; i++) {
+      if (allEls[i].textContent.indexOf("MacroMind Dashboard") !== -1) {
         isDashboard = true;
         break;
       }
     }
 
-    // Method 2: Check all buttons (Chainlit sometimes renders
-    // the profile selector outside a semantic header).
+    // Method 2 (fallback): Look for profile selector button showing "Dashboard".
     if (!isDashboard) {
-      const allBtns = document.querySelectorAll('button');
-      for (const btn of allBtns) {
-        // The active profile button typically has an icon + name.
-        // We look for a button whose ONLY text content is "Dashboard"
-        // (to avoid matching our "Switch to Chat" starter).
-        const spans = btn.querySelectorAll('span, p, div');
-        for (const s of spans) {
-          if (s.textContent.trim() === "Dashboard" && btn.closest('[class*="profile"], [class*="header"], [class*="select"]')) {
-            isDashboard = true;
-            break;
-          }
+      var buttons = document.querySelectorAll("button, [role='button']");
+      for (var j = 0; j < buttons.length; j++) {
+        var el = buttons[j];
+        var text = (el.textContent || "").trim();
+        if (
+          text === "Dashboard" &&
+          el.closest(
+            "[class*='profile'], [class*='select'], [class*='header']"
+          )
+        ) {
+          isDashboard = true;
+          break;
         }
-        if (isDashboard) break;
       }
     }
 
     // Apply / remove the class
-    const newMode = isDashboard ? "dashboard" : "chat";
+    var newMode = isDashboard ? "dashboard" : "chat";
     if (newMode !== currentMode) {
       currentMode = newMode;
       if (isDashboard) {
@@ -70,9 +60,9 @@
   // Run immediately, then observe DOM mutations for profile switches.
   detectAndApply();
 
-  const observer = new MutationObserver(detectAndApply);
+  var observer = new MutationObserver(detectAndApply);
   observer.observe(document.body, { childList: true, subtree: true });
 
-  // Belt-and-suspenders: also poll every second in case mutations miss it.
+  // Belt-and-suspenders: also poll every second.
   setInterval(detectAndApply, 1000);
 })();
