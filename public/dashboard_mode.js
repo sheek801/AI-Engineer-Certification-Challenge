@@ -78,16 +78,9 @@
           var node = nodes[j];
           if (node.nodeType !== 1) continue;
           if ((node.textContent || "").indexOf("__ONBOARDING__:") !== -1) {
-            // Walk up to a sizeable container and hide it
-            var el = node;
-            for (var k = 0; k < 12 && el && el !== document.body; k++) {
-              if (el.offsetHeight > 10) {
-                el.style.setProperty("display", "none", "important");
-                obs.disconnect();
-                return;
-              }
-              el = el.parentElement;
-            }
+            hidePayloadNodeSafely(node);
+            obs.disconnect();
+            return;
           }
         }
       }
@@ -95,6 +88,46 @@
     obs.observe(document.body, { childList: true, subtree: true });
     // Self-cleanup after 8 seconds
     setTimeout(function () { obs.disconnect(); }, 8000);
+  }
+
+  function hidePayloadNodeSafely(node) {
+    // Only hide message-level elements. Never hide large layout containers.
+    var selectors = [
+      '[data-testid="message"]',
+      '[data-testid="step"]',
+      '.step',
+      '.message',
+      '[class*="message"]',
+      '[class*="step"]',
+      'li'
+    ];
+    var target = null;
+    for (var i = 0; i < selectors.length; i++) {
+      if (node.closest) {
+        target = node.closest(selectors[i]);
+      }
+      if (target) break;
+    }
+
+    if (target && target !== document.body && target.offsetHeight < 300) {
+      target.style.setProperty("display", "none", "important");
+      return;
+    }
+
+    // Fallback: scrub payload text only, do not hide parent layout.
+    try {
+      scrubPayloadText(node);
+    } catch (e) {}
+  }
+
+  function scrubPayloadText(root) {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    var current;
+    while ((current = walker.nextNode())) {
+      if ((current.textContent || "").indexOf("__ONBOARDING__:") !== -1) {
+        current.textContent = "";
+      }
+    }
   }
 
   /* ── Inject onboarding overlay ──────────────────────────────────── */
