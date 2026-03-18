@@ -26,6 +26,13 @@ body.onboarding-mode #message-composer {
   display: none !important;
 }
 
+/* Briefly hide chat chrome while app decides onboarding state. */
+body.mm-booting #message-composer,
+body.mm-booting #chat-input,
+body.mm-booting #upload-drop-input {
+  visibility: hidden !important;
+}
+
 body.dashboard-mode #chat-input,
 body.onboarding-mode #chat-input {
   display: none !important;
@@ -68,20 +75,29 @@ body.onboarding-mode #mm-onboarding {
   left: 0;
   right: 0;
   bottom: 0;
-  background: #1C1C1E;
+  background: rgba(20, 20, 22, 0.86);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   overflow-y: auto;
+  padding: 24px;
+  box-sizing: border-box;
 }
 
 .mm-ob-inner {
   text-align: center;
-  max-width: 440px;
+  max-width: 640px;
   width: 100%;
-  padding: 40px 28px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 26px 24px 22px;
+  background: #1C1C1E;
+  border: 1px solid #323236;
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 .mm-ob-emoji {
@@ -91,46 +107,53 @@ body.onboarding-mode #mm-onboarding {
 
 .mm-ob-title {
   color: #ffffff;
-  font-size: 2rem;
+  font-size: 1.65rem;
   font-weight: 800;
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
   letter-spacing: -0.5px;
 }
 
 .mm-ob-sub {
   color: #8E8E93;
-  font-size: 1rem;
-  margin: 0 0 32px 0;
+  font-size: 0.95rem;
+  margin: 0 0 18px 0;
 }
 
 /* ── Form ─────────────────────────────────────────────────────── */
 .mm-ob-form {
   text-align: left;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
 }
 
 .mm-ob-row {
-  margin-bottom: 18px;
+  margin-bottom: 0;
+}
+
+.mm-ob-full {
+  grid-column: 1 / -1;
 }
 
 .mm-ob-row label {
   display: block;
   color: #A1A1A6;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .mm-ob-row input,
 .mm-ob-row select {
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: #2C2C2E;
   border: 1px solid #3A3A3C;
-  border-radius: 10px;
+  border-radius: 9px;
   color: #ffffff;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   outline: none;
   transition: border-color 0.15s ease;
@@ -155,7 +178,7 @@ body.onboarding-mode #mm-onboarding {
 /* ── Goals divider ───────────────────────────────────────────── */
 .mm-ob-divider {
   text-align: center;
-  margin: 24px 0 16px;
+  margin: 8px 0 2px;
   position: relative;
 }
 .mm-ob-divider::before {
@@ -179,13 +202,13 @@ body.onboarding-mode #mm-onboarding {
 /* ── Submit button ────────────────────────────────────────────── */
 .mm-ob-btn {
   width: 100%;
-  padding: 14px;
-  margin-top: 8px;
+  padding: 12px;
+  margin-top: 4px;
   background: linear-gradient(145deg, #0f9b8e 0%, #38ef7d 100%);
   border: none;
   border-radius: 12px;
   color: #ffffff;
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   font-weight: 700;
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   cursor: pointer;
@@ -199,4 +222,27 @@ body.onboarding-mode #mm-onboarding {
 
 .mm-ob-btn:active {
   transform: translateY(0);
+}
+
+.mm-ob-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  #mm-onboarding {
+    padding: 14px;
+  }
+
+  .mm-ob-inner {
+    max-height: calc(100vh - 28px);
+    padding: 22px 16px 18px;
+    border-radius: 14px;
+  }
+
+  .mm-ob-form {
+    grid-template-columns: 1fr;
+  }
 }

@@ -10,6 +10,7 @@ Three flows:
 
 import os
 import logging
+import asyncio
 from datetime import datetime
 
 import chainlit as cl
@@ -476,6 +477,11 @@ async def handle_message(message: cl.Message):
                 await cl.Message(content="MACROMIND_ONBOARDING_START").send()
                 return
 
+            # Send immediate feedback so users never see a blank/stuck screen.
+            await cl.Message(
+                content="Profile saved. Building your personalized welcome..."
+            ).send()
+
             # Build a profile summary for the agent to use as a welcome
             profile_items = list(_store.search((user_id, "profile")))
             profile = {item.key: item.value.get("value", "") for item in profile_items}
@@ -533,14 +539,28 @@ async def handle_message(message: cl.Message):
                     f"create a plan. Keep it concise and friendly."
                 )
 
-            # Invoke the agent for a personalized welcome
-            config = {"configurable": {"thread_id": cl.context.session.id}}
-            response = agent.invoke(
-                {"messages": [HumanMessage(content=welcome_prompt)], "user_id": user_id},
-                config=config,
-            )
-            ai_msg = response["messages"][-1]
-            await cl.Message(content=ai_msg.content).send()
+            # Invoke the agent for a personalized welcome.
+            # Run in a worker thread + timeout to avoid a blank UI if model call is slow.
+            try:
+                config = {"configurable": {"thread_id": cl.context.session.id}}
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        agent.invoke,
+                        {"messages": [HumanMessage(content=welcome_prompt)], "user_id": user_id},
+                        config,
+                    ),
+                    timeout=60,
+                )
+                ai_msg = response["messages"][-1]
+                await cl.Message(content=ai_msg.content).send()
+            except Exception as invoke_err:
+                logger.error(f"Onboarding welcome generation failed: {invoke_err}")
+                fallback = (
+                    "You are all set. Your profile is saved and your nutrition targets "
+                    "are active. Ask me to create your first weekly plan, meal ideas, "
+                    "or a daily calorie/macro breakdown."
+                )
+                await cl.Message(content=fallback).send()
 
         except Exception as e:
             logger.error(f"Onboarding parse error: {e}")

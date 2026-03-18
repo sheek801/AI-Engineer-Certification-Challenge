@@ -12,6 +12,7 @@
   var dashboardActive = false;
   var onboardingShown = false;
   var onboardingCompleted = false;
+  var bootGuardActive = true;
 
   /* ── Dashboard detection ────────────────────────────────────────── */
   function dashboardInDom() {
@@ -135,7 +136,7 @@
       '        <option value="female">Female</option>',
       '      </select>',
       '    </div>',
-      '    <div class="mm-ob-row">',
+      '    <div class="mm-ob-row mm-ob-full">',
       '      <label>Activity Level</label>',
       '      <select id="mm-ob-activity">',
       '        <option value="sedentary">Sedentary (desk job)</option>',
@@ -145,7 +146,7 @@
       '        <option value="very active">Very Active (intense daily)</option>',
       '      </select>',
       '    </div>',
-      '    <div class="mm-ob-row">',
+      '    <div class="mm-ob-row mm-ob-full">',
       '      <label>Coaching Style</label>',
       '      <select id="mm-ob-tone">',
       '        <option value="supportive">Supportive</option>',
@@ -153,7 +154,7 @@
       '        <option value="tough love">Tough Love</option>',
       '      </select>',
       '    </div>',
-      '    <div class="mm-ob-divider"><span>Goals (optional)</span></div>',
+      '    <div class="mm-ob-divider mm-ob-full"><span>Goals (optional)</span></div>',
       '    <div class="mm-ob-row">',
       '      <label id="mm-ob-target-weight-label">Target Weight (lbs)</label>',
       '      <input type="number" id="mm-ob-target-weight" placeholder="e.g. 170" />',
@@ -162,7 +163,7 @@
       '      <label>Target Date</label>',
       '      <input type="date" id="mm-ob-target-date" />',
       '    </div>',
-      '    <button type="submit" class="mm-ob-btn">Save &amp; Start →</button>',
+      '    <button type="submit" class="mm-ob-btn mm-ob-full" id="mm-ob-submit">Save &amp; Start →</button>',
       '  </form>',
       '</div>'
     ].join("\n");
@@ -195,6 +196,7 @@
   }
 
   function submitOnboarding() {
+    var submitBtn = document.getElementById("mm-ob-submit");
     var payload = {
       units:         document.getElementById("mm-ob-units").value,
       weight:        document.getElementById("mm-ob-weight").value,
@@ -222,6 +224,10 @@
       return;
     }
 
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving profile...";
+    }
     onboardingCompleted = true;
     watchAndHidePayload();
     removeOnboarding();
@@ -300,6 +306,7 @@
         dashboardActive = true;
         document.body.classList.add("dashboard-mode");
       }
+      releaseBootGuard();
       return;
     }
     if (dashboardActive) {
@@ -312,15 +319,38 @@
       onboardingShown = true;
       // Add body class IMMEDIATELY so CSS hides all message steps
       document.body.classList.add("onboarding-mode");
+      releaseBootGuard();
       // Hide the text marker
       hideOnboardingMarker();
       // Inject the overlay form
       injectOnboarding();
+      return;
     }
+
+    // If chat starts rendering and onboarding marker is not present, release boot guard.
+    if (!onboardingNeeded() && chatHasRendered()) {
+      releaseBootGuard();
+    }
+  }
+
+  function chatHasRendered() {
+    return (
+      document.querySelector('[data-testid="message"]') ||
+      document.querySelector('[data-testid="step"]') ||
+      document.querySelector("#chat-input") ||
+      document.querySelector("#message-composer")
+    );
+  }
+
+  function releaseBootGuard() {
+    if (!bootGuardActive) return;
+    bootGuardActive = false;
+    document.body.classList.remove("mm-booting");
   }
 
   /* ── Init ────────────────────────────────────────────────────────── */
   function startPolling() {
+    document.body.classList.add("mm-booting");
     // Run immediately, then cascade checks for the first 2 seconds
     applyState();
     setTimeout(applyState, 50);
@@ -329,6 +359,8 @@
     setTimeout(applyState, 700);
     setTimeout(applyState, 1200);
     setTimeout(applyState, 2000);
+    // Safety release for returning users so the app never stays hidden.
+    setTimeout(releaseBootGuard, 1800);
   }
 
   function startObserver() {
