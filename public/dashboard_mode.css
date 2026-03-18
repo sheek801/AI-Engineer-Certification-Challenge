@@ -84,9 +84,14 @@ body.onboarding-mode .mm-float-dashboard-btn {
   color: #d5fbf8;
 }
 
-/* ── Dashboard: hide composer ─────────────────────────────────── */
-body.dashboard-mode #message-composer,
-body.onboarding-mode #message-composer {
+/* ── Hide composer only during onboarding (not when dashboard is inline) ─ */
+body.onboarding-mode #message-composer,
+body.onboarding-mode #chat-input,
+body.onboarding-mode #upload-drop-input {
+  display: none !important;
+}
+
+body.onboarding-mode div.flex.flex-col.mx-auto.w-full.p-4.pt-0:has(#message-composer) {
   display: none !important;
 }
 
@@ -95,21 +100,6 @@ body.mm-booting #message-composer,
 body.mm-booting #chat-input,
 body.mm-booting #upload-drop-input {
   visibility: hidden !important;
-}
-
-body.dashboard-mode #chat-input,
-body.onboarding-mode #chat-input {
-  display: none !important;
-}
-
-body.dashboard-mode #upload-drop-input,
-body.onboarding-mode #upload-drop-input {
-  display: none !important;
-}
-
-body.dashboard-mode div.flex.flex-col.mx-auto.w-full.p-4.pt-0:has(#message-composer),
-body.onboarding-mode div.flex.flex-col.mx-auto.w-full.p-4.pt-0:has(#message-composer) {
-  display: none !important;
 }
 
 /* ── Onboarding: hide all chat message steps / steps ──────────── */

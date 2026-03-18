@@ -9,7 +9,6 @@
 (function () {
   "use strict";
 
-  var dashboardActive = false;
   var onboardingShown = false;
   var onboardingCompleted = false;
   var bootGuardActive = true;
@@ -66,15 +65,19 @@
     } catch (e) {}
   }
 
-  /* ── Hide the __ONBOARDING__: payload the user "sends" ──────────── */
+  /* ── Hide silent payloads (__ONBOARDING__:, __DASHBOARD__) the user sends ─── */
   function watchAndHidePayload() {
+    watchAndHideSilentMessage("__ONBOARDING__:");
+  }
+
+  function watchAndHideSilentMessage(marker) {
     var obs = new MutationObserver(function (mutations) {
       for (var i = 0; i < mutations.length; i++) {
         var nodes = mutations[i].addedNodes;
         for (var j = 0; j < nodes.length; j++) {
           var node = nodes[j];
           if (node.nodeType !== 1) continue;
-          if ((node.textContent || "").indexOf("__ONBOARDING__:") !== -1) {
+          if ((node.textContent || "").indexOf(marker) !== -1) {
             hidePayloadNodeSafely(node);
             obs.disconnect();
             return;
@@ -83,7 +86,6 @@
       }
     });
     obs.observe(document.body, { childList: true, subtree: true });
-    // Self-cleanup after 8 seconds
     setTimeout(function () { obs.disconnect(); }, 8000);
   }
 
@@ -113,16 +115,21 @@
 
     // Fallback: scrub payload text only, do not hide parent layout.
     try {
-      scrubPayloadText(node);
+      scrubPayloadText(node, node.textContent || "");
     } catch (e) {}
   }
 
-  function scrubPayloadText(root) {
+  function scrubPayloadText(root, content) {
+    var markers = ["__ONBOARDING__:", "__DASHBOARD__"];
     var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
     var current;
     while ((current = walker.nextNode())) {
-      if ((current.textContent || "").indexOf("__ONBOARDING__:") !== -1) {
-        current.textContent = "";
+      var t = current.textContent || "";
+      for (var i = 0; i < markers.length; i++) {
+        if (t.indexOf(markers[i]) !== -1) {
+          current.textContent = t.replace(markers[i], "").trim();
+          return;
+        }
       }
     }
   }
@@ -332,20 +339,8 @@
     injectSidebarModeNav();
     injectFloatingDashboard();
 
-    // ── Dashboard detection ──
-    var isDash = dashboardInDom();
-    if (isDash) {
-      if (!dashboardActive) {
-        dashboardActive = true;
-        document.body.classList.add("dashboard-mode");
-      }
-      releaseBootGuard();
-      return;
-    }
-    if (dashboardActive) {
-      dashboardActive = false;
-      document.body.classList.remove("dashboard-mode");
-    }
+    // ── Dashboard: rendered inline as a message; composer stays visible. ──
+    if (dashboardInDom()) releaseBootGuard();
 
     // ── Onboarding detection ──
     if (!onboardingCompleted && onboardingNeeded() && !onboardingShown) {
@@ -436,11 +431,11 @@
   }
 
   function getCurrentProfileName() {
-    if (dashboardActive) return "Dashboard";
     return "Chat";
   }
 
   function sendSilentMessage(text) {
+    if (text === "__DASHBOARD__") watchAndHideSilentMessage("__DASHBOARD__");
     var chatInput =
       document.getElementById("chat-input") ||
       document.querySelector("textarea#chat-input") ||
