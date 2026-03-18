@@ -20,71 +20,14 @@ a[aria-label*="settings" i],
   display: none !important;
 }
 
-/* Profile selector hidden — Dashboard is inline via sidebar button. */
-
-/* Floating Dashboard button (fallback when sidebar DOM isn't available) */
-.mm-float-dashboard-btn {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 10000;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(78, 205, 196, 0.55);
-  background: rgba(19, 19, 20, 0.9);
-  color: #d5fbf8;
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-}
-
-.mm-float-dashboard-btn:hover {
-  border-color: #4ecdc4;
-}
-
-body.onboarding-mode .mm-float-dashboard-btn {
+/* ── Dashboard profile: hide composer when charts visible ──────────── */
+body.dashboard-mode #message-composer,
+body.dashboard-mode #chat-input,
+body.dashboard-mode #upload-drop-input {
   display: none !important;
 }
 
-/* Sidebar mode nav */
-#mm-mode-nav {
-  margin: 8px 8px 12px;
-  padding: 10px;
-  border-radius: 12px;
-  background: rgba(44, 44, 46, 0.85);
-  border: 1px solid #3a3a3c;
-  display: grid;
-  gap: 8px;
-}
-
-.mm-mode-title {
-  font-size: 0.72rem;
-  color: #a1a1a6;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-.mm-mode-btn {
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid #3a3a3c;
-  background: #1c1c1e;
-  color: #f2f2f7;
-  font-size: 0.92rem;
-  cursor: pointer;
-}
-
-.mm-mode-btn.active {
-  border-color: #4ecdc4;
-  background: rgba(78, 205, 196, 0.16);
-  color: #d5fbf8;
-}
-
-/* ── Hide composer only during onboarding (not when dashboard is inline) ─ */
+/* ── Onboarding: hide composer ───────────────────────────────────── */
 body.onboarding-mode #message-composer,
 body.onboarding-mode #chat-input,
 body.onboarding-mode #upload-drop-input {

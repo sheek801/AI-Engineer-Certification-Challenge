@@ -9,11 +9,10 @@
 (function () {
   "use strict";
 
+  var dashboardActive = false;
   var onboardingShown = false;
   var onboardingCompleted = false;
   var bootGuardActive = true;
-  var sidebarNavInjected = false;
-  var floatDashInjected = false;
 
   /* ── Dashboard detection ────────────────────────────────────────── */
   function dashboardInDom() {
@@ -119,8 +118,8 @@
     } catch (e) {}
   }
 
-  function scrubPayloadText(root, content) {
-    var markers = ["__ONBOARDING__:", "__DASHBOARD__"];
+  function scrubPayloadText(root) {
+    var markers = ["__ONBOARDING__:"];
     var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
     var current;
     while ((current = walker.nextNode())) {
@@ -336,11 +335,20 @@
 
   /* ── Main state machine ─────────────────────────────────────────── */
   function applyState() {
-    injectSidebarModeNav();
-    injectFloatingDashboard();
-
-    // ── Dashboard: rendered inline as a message; composer stays visible. ──
-    if (dashboardInDom()) releaseBootGuard();
+    // ── Dashboard mode (profile switch): hide composer when charts visible ──
+    var isDash = dashboardInDom();
+    if (isDash) {
+      if (!dashboardActive) {
+        dashboardActive = true;
+        document.body.classList.add("dashboard-mode");
+      }
+      releaseBootGuard();
+    } else {
+      if (dashboardActive) {
+        dashboardActive = false;
+        document.body.classList.remove("dashboard-mode");
+      }
+    }
 
     // ── Onboarding detection ──
     if (!onboardingCompleted && onboardingNeeded() && !onboardingShown) {
@@ -359,104 +367,6 @@
     if (!onboardingNeeded() && chatHasRendered()) {
       releaseBootGuard();
     }
-
-    updateSidebarModeNavState();
-  }
-
-  function injectFloatingDashboard() {
-    if (floatDashInjected) return;
-    if (document.getElementById("mm-float-dashboard")) return;
-
-    // Keep this visible even if Chainlit sidebar DOM isn't available.
-    var btn = document.createElement("button");
-    btn.id = "mm-float-dashboard";
-    btn.type = "button";
-    btn.textContent = "Dashboard";
-    btn.className = "mm-float-dashboard-btn";
-
-    btn.addEventListener("click", function () {
-      // Render dashboard inline as a message; do not switch profiles.
-      sendSilentMessage("__DASHBOARD__");
-    });
-
-    document.body.appendChild(btn);
-    floatDashInjected = true;
-  }
-
-  function injectSidebarModeNav() {
-    if (sidebarNavInjected || document.getElementById("mm-mode-nav")) return;
-    var sidebar = document.querySelector('[data-testid="sidebar"]') || document.querySelector("aside");
-    if (!sidebar) return;
-
-    var host =
-      sidebar.querySelector('[data-testid="sidebar-content"]') ||
-      sidebar.querySelector(".flex.flex-col") ||
-      sidebar;
-    if (!host) return;
-
-    var nav = document.createElement("div");
-    nav.id = "mm-mode-nav";
-    nav.innerHTML = [
-      '<div class="mm-mode-title">Workspace</div>',
-      '<button type="button" class="mm-mode-btn" data-mm-profile="Chat">Chat</button>',
-      '<button type="button" class="mm-mode-btn" data-mm-profile="Dashboard">Dashboard</button>'
-    ].join("");
-    host.prepend(nav);
-    document.body.classList.add("mm-sidebar-nav-ready");
-
-    var btns = nav.querySelectorAll(".mm-mode-btn");
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].addEventListener("click", function (e) {
-        var target = e.currentTarget.getAttribute("data-mm-profile");
-        if (target === "Dashboard") {
-          sendSilentMessage("__DASHBOARD__");
-        }
-        // Chat button does nothing — user is already in chat
-      });
-    }
-
-    sidebarNavInjected = true;
-    updateSidebarModeNavState();
-  }
-
-  function updateSidebarModeNavState() {
-    var nav = document.getElementById("mm-mode-nav");
-    if (!nav) return;
-    var current = getCurrentProfileName();
-    var btns = nav.querySelectorAll(".mm-mode-btn");
-    for (var i = 0; i < btns.length; i++) {
-      var active = btns[i].getAttribute("data-mm-profile") === current;
-      btns[i].classList.toggle("active", !!active);
-    }
-  }
-
-  function getCurrentProfileName() {
-    return "Chat";
-  }
-
-  function sendSilentMessage(text) {
-    if (text === "__DASHBOARD__") watchAndHideSilentMessage("__DASHBOARD__");
-    var chatInput =
-      document.getElementById("chat-input") ||
-      document.querySelector("textarea#chat-input") ||
-      document.querySelector('textarea[placeholder*="message" i]') ||
-      document.querySelector("textarea");
-    if (!chatInput) return;
-    try {
-      var setter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, "value"
-      ).set;
-      setter.call(chatInput, text);
-      chatInput.dispatchEvent(new Event("input", { bubbles: true }));
-    } catch (e) { return; }
-    setTimeout(function () {
-      var sendBtn =
-        document.querySelector('button[data-testid="send-button"]') ||
-        document.querySelector('button[aria-label*="send" i]') ||
-        document.querySelector('button[type="submit"]');
-      if (sendBtn) { sendBtn.click(); return; }
-      chatInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
-    }, 60);
   }
 
   function chatHasRendered() {

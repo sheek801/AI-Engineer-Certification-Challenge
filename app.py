@@ -58,8 +58,21 @@ def auth_callback(username: str, password: str) -> cl.User | None:
 
 # ── Chat Profiles ─────────────────────────────────────────────────────
 
-# Single Chat profile only — Dashboard is rendered inline via __DASHBOARD__ message
-# so switching never resets the chat thread or clears messages.
+@cl.set_chat_profiles
+async def chat_profiles(current_user: cl.User | None):
+    return [
+        cl.ChatProfile(
+            name="Chat",
+            markdown_description="Talk to MacroMind — log meals, ask questions, get insights",
+            icon="https://cdn-icons-png.flaticon.com/512/1041/1041916.png",
+            default=True,
+        ),
+        cl.ChatProfile(
+            name="Dashboard",
+            markdown_description="View your nutrition dashboard with charts and stats",
+            icon="https://cdn-icons-png.flaticon.com/512/1828/1828765.png",
+        ),
+    ]
 
 
 # ── Starters disabled — chat loads directly ───────────────────────────
@@ -75,20 +88,6 @@ def _check_profile_complete(user_id: str) -> bool:
     profile = {item.key: item.value.get("value", "") for item in profile_items}
     required = {"units", "weight_kg", "height_cm", "age", "sex", "activity_level"}
     return all(profile.get(f, "").strip() for f in required)
-
-
-def _get_chat_thread_id() -> str:
-    """Return the persistent chat thread id for this session.
-
-    This keeps Chat context when switching between Chat and Dashboard profiles.
-    A true "New Chat" action starts a new session and receives a fresh id.
-    """
-    stored = cl.user_session.get("chat_thread_id")
-    if stored:
-        return stored
-    fallback = cl.context.session.id
-    cl.user_session.set("chat_thread_id", fallback)
-    return fallback
 
 
 # ── Dashboard rendering ──────────────────────────────────────────────
@@ -440,8 +439,10 @@ async def start():
     user_id = user.identifier if user else "default_user"
     chat_profile = cl.user_session.get("chat_profile")
 
-    # Ensure chat mode has a stable thread id for this session.
-    _get_chat_thread_id()
+    # Dashboard profile — render charts immediately.
+    if chat_profile == "Dashboard":
+        await render_dashboard(user_id)
+        return
 
     # Check if this user has a complete profile already
     profile_complete = _check_profile_complete(user_id)
@@ -463,10 +464,17 @@ async def handle_message(message: cl.Message):
 
     user = cl.user_session.get("user")
     user_id = user.identifier if user else "default_user"
+    profile = cl.user_session.get("chat_profile")
 
-    # ── Inline Dashboard (sidebar button sends __DASHBOARD__) ─────
-    if message.content.strip() == "__DASHBOARD__":
-        await render_dashboard(user_id)
+    # ── Dashboard mode: refresh charts or prompt to switch to Chat ──
+    if profile == "Dashboard":
+        lower = message.content.lower()
+        if any(kw in lower for kw in ["chat", "talk", "macromind"]):
+            await cl.Message(
+                content="To talk to MacroMind, switch to the **Chat** profile using the dropdown at the top."
+            ).send()
+        else:
+            await render_dashboard(user_id)
         return
 
     # ── Onboarding form submission (from JS overlay) ──────────────
@@ -544,7 +552,7 @@ async def handle_message(message: cl.Message):
             # Invoke the agent for a personalized welcome.
             # Run in a worker thread + timeout to avoid a blank UI if model call is slow.
             try:
-                config = {"configurable": {"thread_id": _get_chat_thread_id()}}
+                config = {"configurable": {"thread_id": cl.context.session.id}}
                 response = await asyncio.wait_for(
                     asyncio.to_thread(
                         agent.invoke,
@@ -570,11 +578,7 @@ async def handle_message(message: cl.Message):
         return
 
     # ── Chat mode ─────────────────────────────────────────────────
-    config = {
-        "configurable": {
-            "thread_id": _get_chat_thread_id(),
-        }
-    }
+    config = {"configurable": {"thread_id": cl.context.session.id}}
 
     response = agent.invoke(
         {
