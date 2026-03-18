@@ -70,43 +70,12 @@ async def chat_profiles(current_user: cl.User | None):
         cl.ChatProfile(
             name="Dashboard",
             markdown_description="View your nutrition dashboard with charts and stats",
-            icon="https://cdn-icons-png.flaticon.com/512/1828/1828791.png",
+            icon="https://cdn-icons-png.flaticon.com/512/1828/1828765.png",
         ),
     ]
 
 
-# ── Starters (standalone, profile-aware) ──────────────────────────────
-
-@cl.set_starters
-async def starters(current_user: cl.User | None, language: str | None = None):
-    try:
-        profile = cl.user_session.get("chat_profile")
-    except Exception:
-        profile = "Chat"
-    if profile == "Dashboard":
-        return []
-    return [
-        cl.Starter(
-            label="Log a Meal",
-            message="I need to log a meal",
-            icon="https://cdn-icons-png.flaticon.com/512/1046/1046857.png",
-        ),
-        cl.Starter(
-            label="Daily Summary",
-            message="Show my daily summary",
-            icon="https://cdn-icons-png.flaticon.com/512/3596/3596091.png",
-        ),
-        cl.Starter(
-            label="Update Profile",
-            message="Help me update my profile",
-            icon="https://cdn-icons-png.flaticon.com/512/1077/1077114.png",
-        ),
-        cl.Starter(
-            label="Analyze Progress",
-            message="Analyze my nutrition progress",
-            icon="https://cdn-icons-png.flaticon.com/512/3281/3281289.png",
-        ),
-    ]
+# ── Starters disabled — chat loads directly ───────────────────────────
 
 
 # ── Onboarding ────────────────────────────────────────────────────────
@@ -251,7 +220,8 @@ def _process_onboarding(settings: dict, user_id: str) -> str | None:
 async def on_settings_update(settings: dict):
     """Called when the user submits the profile settings form.
 
-    Saves silently so starter buttons are NOT cleared.
+    New users (onboarding): show confirmation (starters already cleared).
+    Returning users: save silently so starters are NOT cleared.
     """
     user = cl.user_session.get("user")
     user_id = user.identifier if user else "default_user"
@@ -263,6 +233,16 @@ async def on_settings_update(settings: dict):
     if result is not None:
         # Validation error — must notify the user
         await cl.Message(content=result).send()
+    elif cl.user_session.get("onboarding_welcome_shown"):
+        # New user just finished onboarding — show confirmation
+        await cl.Message(
+            content=(
+                "**Profile saved!** Your daily calorie target has been calculated.\n\n"
+                "Start a **New Chat** (pencil icon at top left) to see your "
+                "quick action buttons, or just type a message to get started!"
+            )
+        ).send()
+    # Returning users updating profile → save silently, starters preserved
 
 
 # ── Dashboard rendering ──────────────────────────────────────────────
@@ -300,6 +280,15 @@ async def render_dashboard(user_id: str):
     # ── Build charts ──────────────────────────────────────────────
     elements = []
 
+    # -- Shared iOS dark theme constants --
+    _BG = "#1C1C1E"
+    _CARD = "#2C2C2E"
+    _GRAY = "#8E8E93"
+    _CORAL = "#FF6B6B"
+    _TEAL = "#4ECDC4"
+    _SKY = "#45B7D1"
+    _FONT = '"Inter", system-ui, -apple-system, sans-serif'
+
     # 1. Calorie gauge
     if tdee > 0:
         remaining = max(0, tdee - total_cal)
@@ -307,20 +296,32 @@ async def render_dashboard(user_id: str):
         cal_fig = go.Figure(go.Indicator(
             mode="gauge+number+delta",
             value=round(total_cal),
-            title={"text": "Calories Today", "font": {"size": 20}},
-            delta={"reference": tdee, "decreasing": {"color": "green"}, "increasing": {"color": "red"}},
+            title={"text": "Calories Today", "font": {"size": 20, "color": "white", "family": _FONT}},
+            number={"font": {"size": 42, "color": "white", "family": _FONT}},
+            delta={
+                "reference": tdee,
+                "decreasing": {"color": _TEAL},
+                "increasing": {"color": _CORAL},
+                "font": {"size": 16, "family": _FONT},
+            },
             gauge={
-                "axis": {"range": [0, tdee], "tickwidth": 1},
-                "bar": {"color": "#FF6B35"},
+                "axis": {"range": [0, tdee], "tickwidth": 0, "tickcolor": _BG, "tickfont": {"color": _GRAY, "size": 10}},
+                "bar": {"color": _TEAL, "thickness": 0.8},
+                "bgcolor": _CARD,
+                "borderwidth": 0,
                 "steps": [
-                    {"range": [0, tdee * 0.5], "color": "#E8F5E9"},
-                    {"range": [tdee * 0.5, tdee * 0.8], "color": "#FFF3E0"},
-                    {"range": [tdee * 0.8, tdee], "color": "#FFEBEE"},
+                    {"range": [0, tdee * 0.5], "color": "#2C3E2C"},
+                    {"range": [tdee * 0.5, tdee * 0.8], "color": "#3E3C2C"},
+                    {"range": [tdee * 0.8, tdee], "color": "#3E2C2C"},
                 ],
-                "threshold": {"line": {"color": "red", "width": 3}, "thickness": 0.75, "value": tdee},
+                "threshold": {"line": {"color": _CORAL, "width": 2}, "thickness": 0.8, "value": tdee},
             },
         ))
-        cal_fig.update_layout(height=300, margin=dict(l=20, r=20, t=60, b=20))
+        cal_fig.update_layout(
+            height=300, margin=dict(l=20, r=20, t=60, b=20),
+            paper_bgcolor=_BG, plot_bgcolor=_BG,
+            font=dict(family=_FONT, color="white"),
+        )
         elements.append(cl.Plotly(name="calorie_gauge", figure=cal_fig, display="inline"))
 
     # 2. Macro breakdown pie chart
@@ -328,14 +329,24 @@ async def render_dashboard(user_id: str):
         macro_fig = go.Figure(go.Pie(
             labels=["Protein", "Carbs", "Fat"],
             values=[round(total_protein), round(total_carbs), round(total_fat)],
-            hole=0.4,
-            marker=dict(colors=["#4CAF50", "#2196F3", "#FF9800"]),
+            hole=0.55,
+            marker=dict(
+                colors=[_TEAL, _SKY, _CORAL],
+                line=dict(color=_BG, width=2),
+            ),
             textinfo="label+value",
             texttemplate="%{label}<br>%{value}g",
+            textfont=dict(color="white", size=13, family=_FONT),
         ))
         macro_fig.update_layout(
-            title_text="Macro Breakdown (grams)", title_x=0.5,
+            title_text="Macro Breakdown (grams)",
+            title_x=0.5,
+            title_font=dict(color="white", size=16, family=_FONT),
             height=300, margin=dict(l=20, r=20, t=60, b=20),
+            paper_bgcolor=_BG, plot_bgcolor=_BG,
+            font=dict(family=_FONT, color="white"),
+            legend=dict(font=dict(color=_GRAY, size=12)),
+            showlegend=True,
         )
         elements.append(cl.Plotly(name="macro_pie", figure=macro_fig, display="inline"))
 
@@ -353,16 +364,123 @@ async def render_dashboard(user_id: str):
         cals = [round(d[1]) for d in sorted_days]
 
         trend_fig = go.Figure()
-        trend_fig.add_trace(go.Bar(x=dates, y=cals, name="Calories", marker_color="#FF6B35"))
+        trend_fig.add_trace(go.Bar(
+            x=dates, y=cals, name="Calories",
+            marker_color=_SKY,
+            marker_line_width=0,
+        ))
         if tdee > 0:
-            trend_fig.add_hline(y=tdee, line_dash="dash", line_color="red",
-                                annotation_text=f"TDEE: {round(tdee)}")
+            trend_fig.add_hline(
+                y=tdee, line_dash="dot", line_color=_CORAL, line_width=2,
+                annotation_text=f"TDEE: {round(tdee)}",
+                annotation_font=dict(color=_CORAL, size=12, family=_FONT),
+            )
         trend_fig.update_layout(
-            title_text="Daily Calories (Last 7 Days)", title_x=0.5,
-            xaxis_title="Date", yaxis_title="Calories",
+            title_text="Daily Calories (Last 7 Days)",
+            title_x=0.5,
+            title_font=dict(color="white", size=16, family=_FONT),
+            yaxis_title="Calories",
+            yaxis=dict(
+                titlefont=dict(color=_GRAY, size=12),
+                tickfont=dict(color=_GRAY, size=10),
+                gridcolor="#3A3A3C", gridwidth=0.5,
+                zeroline=False,
+            ),
+            xaxis=dict(
+                tickfont=dict(color=_GRAY, size=10),
+                showgrid=False,
+            ),
             height=300, margin=dict(l=40, r=20, t=60, b=40),
+            paper_bgcolor=_BG, plot_bgcolor=_BG,
+            font=dict(family=_FONT, color="white"),
+            bargap=0.3,
         )
         elements.append(cl.Plotly(name="weekly_trend", figure=trend_fig, display="inline"))
+
+    # 4. Protein trend (line chart — last 7 days)
+    protein_by_day = defaultdict(float)
+    for m in all_meals:
+        d = m.value.get("date", "")
+        if d:
+            protein_by_day[d] += m.value.get("protein_g", 0)
+
+    if len(protein_by_day) > 1:
+        sorted_pdays = sorted(protein_by_day.items())[-7:]
+        p_dates = [d[0] for d in sorted_pdays]
+        p_vals = [round(d[1]) for d in sorted_pdays]
+
+        # Protein target: 0.8g per lb bodyweight (or 1.8g per kg)
+        protein_target = 0
+        if "weight_kg" in profile:
+            protein_target = round(float(profile["weight_kg"]) * 1.8)
+
+        pro_fig = go.Figure()
+        pro_fig.add_trace(go.Scatter(
+            x=p_dates, y=p_vals, mode="lines+markers",
+            name="Protein",
+            line=dict(color=_TEAL, width=3),
+            marker=dict(size=8, color=_TEAL),
+        ))
+        if protein_target > 0:
+            pro_fig.add_hline(
+                y=protein_target, line_dash="dot", line_color=_CORAL, line_width=2,
+                annotation_text=f"Target: {protein_target}g",
+                annotation_font=dict(color=_CORAL, size=11, family=_FONT),
+            )
+        pro_fig.update_layout(
+            title_text="Daily Protein (Last 7 Days)",
+            title_x=0.5,
+            title_font=dict(color="white", size=16, family=_FONT),
+            yaxis_title="Protein (g)",
+            yaxis=dict(
+                titlefont=dict(color=_GRAY, size=12),
+                tickfont=dict(color=_GRAY, size=10),
+                gridcolor="#3A3A3C", gridwidth=0.5,
+                zeroline=False,
+            ),
+            xaxis=dict(tickfont=dict(color=_GRAY, size=10), showgrid=False),
+            height=280, margin=dict(l=40, r=20, t=60, b=40),
+            paper_bgcolor=_BG, plot_bgcolor=_BG,
+            font=dict(family=_FONT, color="white"),
+            showlegend=False,
+        )
+        elements.append(cl.Plotly(name="protein_trend", figure=pro_fig, display="inline"))
+
+    # 5. Meal frequency by type (horizontal bar — this week)
+    meal_type_counts = defaultdict(int)
+    for m in all_meals:
+        mt = m.value.get("meal_type", "snack")
+        meal_type_counts[mt] += 1
+
+    if meal_type_counts:
+        ordered_types = ["breakfast", "lunch", "dinner", "snack"]
+        type_labels = [t.capitalize() for t in ordered_types]
+        type_counts = [meal_type_counts.get(t, 0) for t in ordered_types]
+        type_colors = [_TEAL, _SKY, _CORAL, _GRAY]
+
+        freq_fig = go.Figure(go.Bar(
+            y=type_labels, x=type_counts,
+            orientation="h",
+            marker=dict(color=type_colors, line_width=0),
+            text=type_counts, textposition="auto",
+            textfont=dict(color="white", size=13, family=_FONT),
+        ))
+        freq_fig.update_layout(
+            title_text="Meals Logged by Type",
+            title_x=0.5,
+            title_font=dict(color="white", size=16, family=_FONT),
+            xaxis=dict(
+                tickfont=dict(color=_GRAY, size=10),
+                gridcolor="#3A3A3C", gridwidth=0.5,
+                zeroline=False,
+            ),
+            yaxis=dict(tickfont=dict(color="white", size=13), autorange="reversed"),
+            height=250, margin=dict(l=80, r=20, t=60, b=20),
+            paper_bgcolor=_BG, plot_bgcolor=_BG,
+            font=dict(family=_FONT, color="white"),
+            bargap=0.35,
+        )
+        elements.append(cl.Plotly(name="meal_frequency", figure=freq_fig, display="inline"))
 
     # ── Build summary text ────────────────────────────────────────
     streak_text = f"**Streak:** {streak_count} day(s) (Best: {streak_best})" if streak_count > 0 else "**Streak:** Start logging to begin!"
@@ -371,10 +489,21 @@ async def render_dashboard(user_id: str):
         profile_text = "*No profile set up yet. Switch to Chat and set your profile!*"
     else:
         profile_lines = []
+        units = profile.get("units", "metric")
         if "weight_kg" in profile:
-            profile_lines.append(f"Weight: {profile['weight_kg']} kg")
+            w = float(profile["weight_kg"])
+            if units == "imperial":
+                profile_lines.append(f"Weight: {round(w * 2.20462)} lbs")
+            else:
+                profile_lines.append(f"Weight: {w} kg")
         if "height_cm" in profile:
-            profile_lines.append(f"Height: {profile['height_cm']} cm")
+            h = float(profile["height_cm"])
+            if units == "imperial":
+                total_in = round(h / 2.54)
+                feet, inches = divmod(total_in, 12)
+                profile_lines.append(f"Height: {feet}'{inches}\"")
+            else:
+                profile_lines.append(f"Height: {h} cm")
         if "tdee" in profile:
             profile_lines.append(f"TDEE: {profile['tdee']} cal/day")
         profile_text = " | ".join(profile_lines) if profile_lines else "*Profile incomplete*"
@@ -422,33 +551,59 @@ async def _ensure_agent():
 async def start():
     """Runs once when a user opens the chat or switches profiles.
 
-    CRITICAL: Never send cl.Message here — it clears starter buttons.
-    Agent initialization is deferred to first message via _ensure_agent().
+    New user (no profile) → JS onboarding overlay appears, collects profile.
+    Returning user         → chat loads directly, no onboarding.
+    Dashboard profile      → render charts immediately.
     """
-    # Silently init the agent (no message sent → starters persist)
     await _ensure_agent()
 
     user = cl.user_session.get("user")
     user_id = user.identifier if user else "default_user"
     chat_profile = cl.user_session.get("chat_profile")
 
-    # ── Dashboard mode: render immediately, no chat ────────────────
     if chat_profile == "Dashboard":
         await render_dashboard(user_id)
         return
 
-    # ── Chat mode ──────────────────────────────────────────────────
-    # Register the settings form so users can set/update their
-    # profile via the gear icon.  chainlit.md serves as welcome.
-    await _show_onboarding_settings()
+    # Check if this user has a complete profile already
+    profile_complete = _check_profile_complete(user_id)
+
+    if not profile_complete:
+        # New user — send a marker that JS detects to show the onboarding overlay.
+        # ChatSettings NOT registered — no gear icon, no settings tab.
+        await cl.Message(
+            content="__ONBOARDING_NEEDED__",
+        ).send()
+        return
+
+    # Returning user — profile exists, go straight to chat.
+    # No settings panel registered — onboarding is the only profile setup path.
 
 
 @cl.on_message
 async def handle_message(message: cl.Message):
     """Runs every time the user sends a message."""
+    import json as _json
+
     user = cl.user_session.get("user")
     user_id = user.identifier if user else "default_user"
     profile = cl.user_session.get("chat_profile")
+
+    # ── Onboarding form submission (from JS overlay) ──────────────
+    if message.content.startswith("__ONBOARDING__:"):
+        try:
+            payload = _json.loads(message.content[len("__ONBOARDING__:"):])
+            _save_onboarding_from_overlay(payload, user_id)
+            await cl.Message(
+                content=(
+                    "**Profile saved!** Your daily calorie target has been calculated.\n\n"
+                    "Type anything to get started, or ask me a nutrition question!"
+                )
+            ).send()
+        except Exception as e:
+            logger.error(f"Onboarding parse error: {e}")
+            await cl.Message(content="Something went wrong saving your profile. Please try again.").send()
+        return
 
     # ── Dashboard mode ────────────────────────────────────────────
     if profile == "Dashboard":
@@ -479,3 +634,53 @@ async def handle_message(message: cl.Message):
 
     ai_message = response["messages"][-1]
     await cl.Message(content=ai_message.content).send()
+
+
+def _save_onboarding_from_overlay(payload: dict, user_id: str):
+    """Parse the onboarding JSON from the JS overlay and save to store."""
+    if _store is None:
+        return
+
+    units_raw = payload.get("units", "imperial")
+    is_imperial = "imperial" in units_raw.lower()
+
+    weight_val = float(payload.get("weight", 0))
+    height_val = float(payload.get("height", 0))
+    age_val = int(float(payload.get("age", 0)))
+    sex = payload.get("sex", "male").lower()
+    activity_raw = payload.get("activity", "moderate")
+    tone = payload.get("tone", "balanced").lower()
+
+    # Convert to metric for storage
+    if is_imperial:
+        weight_kg = round(weight_val / 2.20462, 1)
+        height_cm = round(height_val * 2.54, 1)
+    else:
+        weight_kg = round(weight_val, 1)
+        height_cm = round(height_val, 1)
+
+    # Map activity label to key
+    activity_map = {
+        "sedentary": "sedentary",
+        "light": "light",
+        "moderate": "moderate",
+        "active": "active",
+        "very active": "very_active",
+    }
+    activity = activity_map.get(activity_raw.lower().split("(")[0].strip(), "moderate")
+
+    # Calculate TDEE
+    bmr, tdee = calculate_tdee(weight_kg, height_cm, age_val, sex, activity)
+
+    # Store all fields
+    ns = (user_id, "profile")
+    _store.put(ns, "weight_kg", {"value": str(weight_kg)})
+    _store.put(ns, "height_cm", {"value": str(height_cm)})
+    _store.put(ns, "age", {"value": str(age_val)})
+    _store.put(ns, "sex", {"value": sex})
+    _store.put(ns, "activity_level", {"value": activity})
+    _store.put(ns, "tdee", {"value": str(round(tdee))})
+    _store.put(ns, "units", {"value": "imperial" if is_imperial else "metric"})
+    _store.put(ns, "tone", {"value": tone})
+
+    logger.info(f"Onboarding saved for {user_id}: TDEE={round(tdee)}, tone={tone}")

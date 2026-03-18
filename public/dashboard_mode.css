@@ -1,26 +1,170 @@
 /*
- * MacroMind: Hide the chat composer in Dashboard mode.
+ * MacroMind UI Styles
  *
- * The body.dashboard-mode class is toggled by dashboard_mode.js.
- * Targets elements by their stable IDs assigned by Chainlit.
+ * Three modes:
+ *   .dashboard-mode    — hide composer for dashboard charts
+ *   .onboarding-mode   — full-screen onboarding form overlay
+ *   Login page         — hide Chainlit logo
  */
 
-/* Hide the composer box (contains textarea, attach button, send button) */
-body.dashboard-mode #message-composer {
+/* ── Hide Chainlit logo on login page ─────────────────────────── */
+img[src*="/logo"] {
   display: none !important;
 }
 
-/* Hide the chat input textarea directly */
-body.dashboard-mode #chat-input {
+/* ── Dashboard: hide composer ─────────────────────────────────── */
+body.dashboard-mode #message-composer,
+body.onboarding-mode #message-composer {
   display: none !important;
 }
 
-/* Hide the file upload drop input */
-body.dashboard-mode #upload-drop-input {
+body.dashboard-mode #chat-input,
+body.onboarding-mode #chat-input {
   display: none !important;
 }
 
-/* Hide the wrapper that contains the composer and disclaimer */
-body.dashboard-mode div.flex.flex-col.mx-auto.w-full.p-4.pt-0:has(#message-composer) {
+body.dashboard-mode #upload-drop-input,
+body.onboarding-mode #upload-drop-input {
   display: none !important;
+}
+
+body.dashboard-mode div.flex.flex-col.mx-auto.w-full.p-4.pt-0:has(#message-composer),
+body.onboarding-mode div.flex.flex-col.mx-auto.w-full.p-4.pt-0:has(#message-composer) {
+  display: none !important;
+}
+
+/* ── Onboarding: hide all chat message steps / steps ──────────── */
+/* Belt-and-suspenders: multiple selectors for Chainlit 2.x DOM   */
+body.onboarding-mode [data-testid="step"],
+body.onboarding-mode [data-testid="message"],
+body.onboarding-mode .step,
+body.onboarding-mode .message,
+body.onboarding-mode [class*="cl-step"],
+body.onboarding-mode [class*="step-container"],
+body.onboarding-mode [class*="message-container"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* The overlay itself must always be visible */
+body.onboarding-mode #mm-onboarding {
+  visibility: visible !important;
+  pointer-events: auto !important;
+  display: flex !important;
+}
+
+/* ── Onboarding overlay ───────────────────────────────────────── */
+#mm-onboarding {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #1C1C1E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  overflow-y: auto;
+}
+
+.mm-ob-inner {
+  text-align: center;
+  max-width: 440px;
+  width: 100%;
+  padding: 40px 28px;
+}
+
+.mm-ob-emoji {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.mm-ob-title {
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+}
+
+.mm-ob-sub {
+  color: #8E8E93;
+  font-size: 1rem;
+  margin: 0 0 32px 0;
+}
+
+/* ── Form ─────────────────────────────────────────────────────── */
+.mm-ob-form {
+  text-align: left;
+}
+
+.mm-ob-row {
+  margin-bottom: 18px;
+}
+
+.mm-ob-row label {
+  display: block;
+  color: #A1A1A6;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.mm-ob-row input,
+.mm-ob-row select {
+  width: 100%;
+  padding: 12px 14px;
+  background: #2C2C2E;
+  border: 1px solid #3A3A3C;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  outline: none;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+}
+
+.mm-ob-row input:focus,
+.mm-ob-row select:focus {
+  border-color: #4ECDC4;
+}
+
+.mm-ob-row input::placeholder {
+  color: #636366;
+}
+
+.mm-ob-row select option {
+  background: #2C2C2E;
+  color: #ffffff;
+}
+
+/* ── Submit button ────────────────────────────────────────────── */
+.mm-ob-btn {
+  width: 100%;
+  padding: 14px;
+  margin-top: 8px;
+  background: linear-gradient(145deg, #0f9b8e 0%, #38ef7d 100%);
+  border: none;
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mm-ob-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(78, 205, 196, 0.3);
+}
+
+.mm-ob-btn:active {
+  transform: translateY(0);
 }
