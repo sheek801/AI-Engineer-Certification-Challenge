@@ -79,7 +79,9 @@ def build_graph(tools: list, checkpointer=None, store=None):
                     tone = tone_item.value.get("value", "balanced")
             except Exception:
                 pass
-        prompt = get_system_prompt(tone) + f"\n\nCurrent user_id: {user_id}"
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
+        prompt = get_system_prompt(tone) + f"\n\nToday's date: {today}\nCurrent user_id: {user_id}"
         messages = [SystemMessage(content=prompt)] + state["messages"]
         response = llm_with_tools.invoke(messages)
         return {"messages": [response]}
