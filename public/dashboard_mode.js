@@ -385,6 +385,7 @@
       '<button type="button" class="mm-mode-btn" data-mm-profile="Dashboard">Dashboard</button>'
     ].join("");
     host.prepend(nav);
+    document.body.classList.add("mm-sidebar-nav-ready");
 
     var btns = nav.querySelectorAll(".mm-mode-btn");
     for (var i = 0; i < btns.length; i++) {

@@ -20,12 +20,10 @@ a[aria-label*="settings" i],
   display: none !important;
 }
 
-/* Hide top profile dropdown; we expose sidebar mode buttons instead. */
-button[data-testid="chat-profile-selector"],
-[data-testid="chat-profile-selector"],
-button[aria-label*="chat profile" i],
-button[aria-label*="profile" i]:has(span),
-[role="combobox"]:has(span) {
+/* Hide top profile dropdown only after sidebar nav is ready. */
+body.mm-sidebar-nav-ready button[data-testid="chat-profile-selector"],
+body.mm-sidebar-nav-ready [data-testid="chat-profile-selector"],
+body.mm-sidebar-nav-ready button[aria-label*="chat profile" i] {
   display: none !important;
 }
 
