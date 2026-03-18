@@ -391,7 +391,10 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener("click", function (e) {
         var target = e.currentTarget.getAttribute("data-mm-profile");
-        switchProfileViaDropdown(target);
+        if (target === "Dashboard") {
+          sendSilentMessage("__DASHBOARD__");
+        }
+        // Chat button does nothing — user is already in chat
       });
     }
 
@@ -412,45 +415,30 @@
 
   function getCurrentProfileName() {
     if (dashboardActive) return "Dashboard";
-    var trigger = findProfileTrigger();
-    if (!trigger) return "Chat";
-    var text = (trigger.textContent || "").toLowerCase();
-    if (text.indexOf("dashboard") !== -1) return "Dashboard";
     return "Chat";
   }
 
-  function findProfileTrigger() {
-    var candidates = document.querySelectorAll(
-      'button[aria-haspopup="listbox"], button[role="combobox"], [role="combobox"]'
-    );
-    for (var i = 0; i < candidates.length; i++) {
-      var t = (candidates[i].textContent || "").toLowerCase();
-      if (t.indexOf("chat") !== -1 || t.indexOf("dashboard") !== -1) {
-        return candidates[i];
-      }
-    }
-    return null;
-  }
-
-  function switchProfileViaDropdown(targetProfile) {
-    var current = getCurrentProfileName();
-    if (current === targetProfile) return;
-
-    var trigger = findProfileTrigger();
-    if (!trigger || !trigger.click) return;
-    trigger.click();
-
+  function sendSilentMessage(text) {
+    var chatInput =
+      document.getElementById("chat-input") ||
+      document.querySelector("textarea#chat-input") ||
+      document.querySelector('textarea[placeholder*="message" i]') ||
+      document.querySelector("textarea");
+    if (!chatInput) return;
+    try {
+      var setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype, "value"
+      ).set;
+      setter.call(chatInput, text);
+      chatInput.dispatchEvent(new Event("input", { bubbles: true }));
+    } catch (e) { return; }
     setTimeout(function () {
-      var options = document.querySelectorAll(
-        '[role="option"], li[role="option"], [data-testid="select-option"], button, li, div'
-      );
-      for (var i = 0; i < options.length; i++) {
-        var txt = (options[i].textContent || "").trim().toLowerCase();
-        if (txt === targetProfile.toLowerCase()) {
-          if (options[i].click) options[i].click();
-          return;
-        }
-      }
+      var sendBtn =
+        document.querySelector('button[data-testid="send-button"]') ||
+        document.querySelector('button[aria-label*="send" i]') ||
+        document.querySelector('button[type="submit"]');
+      if (sendBtn) { sendBtn.click(); return; }
+      chatInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
     }, 60);
   }
 

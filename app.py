@@ -58,21 +58,8 @@ def auth_callback(username: str, password: str) -> cl.User | None:
 
 # ── Chat Profiles ─────────────────────────────────────────────────────
 
-@cl.set_chat_profiles
-async def chat_profiles(current_user: cl.User | None):
-    return [
-        cl.ChatProfile(
-            name="Chat",
-            markdown_description="Talk to MacroMind — log meals, ask questions, get insights",
-            icon="https://cdn-icons-png.flaticon.com/512/1041/1041916.png",
-            default=True,
-        ),
-        cl.ChatProfile(
-            name="Dashboard",
-            markdown_description="View your nutrition dashboard with charts and stats",
-            icon="https://cdn-icons-png.flaticon.com/512/1828/1828765.png",
-        ),
-    ]
+# Single Chat profile only — Dashboard is rendered inline via __DASHBOARD__ message
+# so switching never resets the chat thread or clears messages.
 
 
 # ── Starters disabled — chat loads directly ───────────────────────────
@@ -453,13 +440,8 @@ async def start():
     user_id = user.identifier if user else "default_user"
     chat_profile = cl.user_session.get("chat_profile")
 
-    if chat_profile == "Dashboard":
-        await render_dashboard(user_id)
-        return
-
-    # Ensure chat mode has a stable thread id across profile switches.
-    thread_id = _get_chat_thread_id()
-    is_return_switch = cl.user_session.get("chat_thread_established", False)
+    # Ensure chat mode has a stable thread id for this session.
+    _get_chat_thread_id()
 
     # Check if this user has a complete profile already
     profile_complete = _check_profile_complete(user_id)
@@ -471,13 +453,7 @@ async def start():
         ).send()
         return
 
-    if is_return_switch:
-        # Returning from Dashboard — thread memory is intact, just re-surface chat silently.
-        # No message sent so the chat doesn't look like it was reset.
-        return
-
-    # First time Chat loads for this session — mark it established.
-    cl.user_session.set("chat_thread_established", True)
+    # Returning user — profile exists, go straight to chat.
 
 
 @cl.on_message
@@ -487,7 +463,11 @@ async def handle_message(message: cl.Message):
 
     user = cl.user_session.get("user")
     user_id = user.identifier if user else "default_user"
-    profile = cl.user_session.get("chat_profile")
+
+    # ── Inline Dashboard (sidebar button sends __DASHBOARD__) ─────
+    if message.content.strip() == "__DASHBOARD__":
+        await render_dashboard(user_id)
+        return
 
     # ── Onboarding form submission (from JS overlay) ──────────────
     if message.content.startswith("__ONBOARDING__:"):
@@ -587,18 +567,6 @@ async def handle_message(message: cl.Message):
         except Exception as e:
             logger.error(f"Onboarding parse error: {e}")
             await cl.Message(content="Something went wrong saving your profile. Please try again.").send()
-        return
-
-    # ── Dashboard mode ────────────────────────────────────────────
-    if profile == "Dashboard":
-        lower = message.content.lower()
-        if any(kw in lower for kw in ["chat", "talk", "macromind"]):
-            await cl.Message(
-                content="To talk to MacroMind, switch to the **Chat** "
-                        "profile using the selector at the top of the page."
-            ).send()
-        else:
-            await render_dashboard(user_id)
         return
 
     # ── Chat mode ─────────────────────────────────────────────────

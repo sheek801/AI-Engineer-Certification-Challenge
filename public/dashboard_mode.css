@@ -20,12 +20,7 @@ a[aria-label*="settings" i],
   display: none !important;
 }
 
-/* Hide top profile dropdown only after sidebar nav is ready. */
-body.mm-sidebar-nav-ready button[data-testid="chat-profile-selector"],
-body.mm-sidebar-nav-ready [data-testid="chat-profile-selector"],
-body.mm-sidebar-nav-ready button[aria-label*="chat profile" i] {
-  display: none !important;
-}
+/* Profile selector hidden — Dashboard is inline via sidebar button. */
 
 /* Sidebar mode nav */
 #mm-mode-nav {
