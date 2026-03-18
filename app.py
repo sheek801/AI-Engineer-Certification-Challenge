@@ -572,7 +572,7 @@ async def start():
         # New user — send a marker that JS detects to show the onboarding overlay.
         # ChatSettings NOT registered — no gear icon, no settings tab.
         await cl.Message(
-            content="__ONBOARDING_NEEDED__",
+            content="MACROMIND_ONBOARDING_START",
         ).send()
         return
 

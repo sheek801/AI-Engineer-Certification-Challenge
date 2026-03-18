@@ -4,7 +4,7 @@
  * Two concerns:
  *   1. Dashboard mode — hide composer when dashboard charts are visible
  *   2. Onboarding overlay — show a full-screen form for new users
- *      (detected by "__ONBOARDING_NEEDED__" anywhere in page HTML)
+ *      (detected by "MACROMIND_ONBOARDING_START" anywhere in page HTML)
  */
 (function () {
   "use strict";
@@ -22,7 +22,7 @@
   // Use innerHTML search — works regardless of Chainlit's CSS class names
   function onboardingNeeded() {
     if (onboardingCompleted) return false;
-    return document.body.innerHTML.indexOf("__ONBOARDING_NEEDED__") !== -1;
+    return document.body.innerHTML.indexOf("MACROMIND_ONBOARDING_START") !== -1;
   }
 
   /* ── Hide the marker message ────────────────────────────────────── */
@@ -37,7 +37,7 @@
       );
       var node;
       while ((node = walker.nextNode())) {
-        if (node.textContent.indexOf("__ONBOARDING_NEEDED__") !== -1) {
+        if (node.textContent.indexOf("MACROMIND_ONBOARDING_START") !== -1) {
           var el = node.parentElement;
           for (var i = 0; i < 15 && el && el !== document.body; i++) {
             if (el.offsetHeight > 30 || el.clientHeight > 30) {
@@ -55,7 +55,7 @@
     var candidates = document.querySelectorAll("p, div, span, pre, code, li");
     for (var j = 0; j < candidates.length; j++) {
       var t = candidates[j].textContent.trim();
-      if (t === "__ONBOARDING_NEEDED__") {
+      if (t === "MACROMIND_ONBOARDING_START") {
         var c = candidates[j];
         for (var k = 0; k < 12 && c && c !== document.body; k++) {
           if (c.offsetHeight > 20) {
