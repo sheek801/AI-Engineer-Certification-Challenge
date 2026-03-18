@@ -458,21 +458,26 @@ async def start():
         return
 
     # Ensure chat mode has a stable thread id across profile switches.
-    _get_chat_thread_id()
+    thread_id = _get_chat_thread_id()
+    is_return_switch = cl.user_session.get("chat_thread_established", False)
 
     # Check if this user has a complete profile already
     profile_complete = _check_profile_complete(user_id)
 
     if not profile_complete:
         # New user — send a marker that JS detects to show the onboarding overlay.
-        # ChatSettings NOT registered — no gear icon, no settings tab.
         await cl.Message(
             content="MACROMIND_ONBOARDING_START",
         ).send()
         return
 
-    # Returning user — profile exists, go straight to chat.
-    # No settings panel registered — onboarding is the only profile setup path.
+    if is_return_switch:
+        # Returning from Dashboard — thread memory is intact, just re-surface chat silently.
+        # No message sent so the chat doesn't look like it was reset.
+        return
+
+    # First time Chat loads for this session — mark it established.
+    cl.user_session.set("chat_thread_established", True)
 
 
 @cl.on_message
