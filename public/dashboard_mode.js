@@ -28,45 +28,40 @@
 
   /* ── Hide the marker message ────────────────────────────────────── */
   function hideOnboardingMarker() {
-    // Strategy 1: TreeWalker to find the exact text node, walk up to hide container
+    hideTextMarkerSafely("MACROMIND_ONBOARDING_START");
+  }
+
+  function hideTextMarkerSafely(markerText) {
     try {
-      var walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
       var node;
       while ((node = walker.nextNode())) {
-        if (node.textContent.indexOf("MACROMIND_ONBOARDING_START") !== -1) {
-          var el = node.parentElement;
-          for (var i = 0; i < 15 && el && el !== document.body; i++) {
-            if (el.offsetHeight > 30 || el.clientHeight > 30) {
-              el.style.setProperty("display", "none", "important");
-              el.style.setProperty("visibility", "hidden", "important");
-              break;
-            }
-            el = el.parentElement;
-          }
+        var text = (node.textContent || "").trim();
+        if (!text || text.indexOf(markerText) === -1) continue;
+
+        var parent = node.parentElement;
+        var target = null;
+        if (parent && parent.closest) {
+          target =
+            parent.closest('[data-testid="message"]') ||
+            parent.closest('[data-testid="step"]') ||
+            parent.closest(".message") ||
+            parent.closest(".step") ||
+            parent.closest('[class*="message"]') ||
+            parent.closest('[class*="step"]') ||
+            parent.closest("li");
         }
+
+        // Hide only message-level elements, never large layout wrappers.
+        if (target && target !== document.body && target.offsetHeight < 320) {
+          target.style.setProperty("display", "none", "important");
+          continue;
+        }
+
+        // Fallback: clear marker text only.
+        node.textContent = node.textContent.replace(markerText, "").trim();
       }
     } catch (e) {}
-
-    // Strategy 2: querySelectorAll — find any element whose trimmed text IS the marker
-    var candidates = document.querySelectorAll("p, div, span, pre, code, li");
-    for (var j = 0; j < candidates.length; j++) {
-      var t = candidates[j].textContent.trim();
-      if (t === "MACROMIND_ONBOARDING_START") {
-        var c = candidates[j];
-        for (var k = 0; k < 12 && c && c !== document.body; k++) {
-          if (c.offsetHeight > 20) {
-            c.style.setProperty("display", "none", "important");
-            break;
-          }
-          c = c.parentElement;
-        }
-      }
-    }
   }
 
   /* ── Hide the __ONBOARDING__: payload the user "sends" ──────────── */
