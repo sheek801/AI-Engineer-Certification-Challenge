@@ -22,6 +22,31 @@ a[aria-label*="settings" i],
 
 /* Profile selector hidden — Dashboard is inline via sidebar button. */
 
+/* Floating Dashboard button (fallback when sidebar DOM isn't available) */
+.mm-float-dashboard-btn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10000;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(78, 205, 196, 0.55);
+  background: rgba(19, 19, 20, 0.9);
+  color: #d5fbf8;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.mm-float-dashboard-btn:hover {
+  border-color: #4ecdc4;
+}
+
+body.onboarding-mode .mm-float-dashboard-btn {
+  display: none !important;
+}
+
 /* Sidebar mode nav */
 #mm-mode-nav {
   margin: 8px 8px 12px;

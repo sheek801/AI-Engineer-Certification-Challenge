@@ -14,6 +14,7 @@
   var onboardingCompleted = false;
   var bootGuardActive = true;
   var sidebarNavInjected = false;
+  var floatDashInjected = false;
 
   /* ── Dashboard detection ────────────────────────────────────────── */
   function dashboardInDom() {
@@ -329,6 +330,7 @@
   /* ── Main state machine ─────────────────────────────────────────── */
   function applyState() {
     injectSidebarModeNav();
+    injectFloatingDashboard();
 
     // ── Dashboard detection ──
     var isDash = dashboardInDom();
@@ -364,6 +366,26 @@
     }
 
     updateSidebarModeNavState();
+  }
+
+  function injectFloatingDashboard() {
+    if (floatDashInjected) return;
+    if (document.getElementById("mm-float-dashboard")) return;
+
+    // Keep this visible even if Chainlit sidebar DOM isn't available.
+    var btn = document.createElement("button");
+    btn.id = "mm-float-dashboard";
+    btn.type = "button";
+    btn.textContent = "Dashboard";
+    btn.className = "mm-float-dashboard-btn";
+
+    btn.addEventListener("click", function () {
+      // Render dashboard inline as a message; do not switch profiles.
+      sendSilentMessage("__DASHBOARD__");
+    });
+
+    document.body.appendChild(btn);
+    floatDashInjected = true;
   }
 
   function injectSidebarModeNav() {
