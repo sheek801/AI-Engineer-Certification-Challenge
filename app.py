@@ -272,6 +272,11 @@ async def render_dashboard(user_id: str):
     total_carbs = sum(m.value.get("carbs_g", 0) for m in today_meals)
     total_fat = sum(m.value.get("fat_g", 0) for m in today_meals)
 
+    # Today's exercise
+    all_exercises = list(_store.search((user_id, "exercise"), query="exercise activity", limit=500))
+    today_exercises = [e for e in all_exercises if e.value.get("date") == today]
+    total_burned = sum(e.value.get("calories_burned", 0) for e in today_exercises)
+
     # Streak
     streak_items = list(_store.search((user_id, "streaks")))
     streak_count = streak_items[0].value.get("count", 0) if streak_items else 0
@@ -289,10 +294,11 @@ async def render_dashboard(user_id: str):
     _SKY = "#45B7D1"
     _FONT = '"Inter", system-ui, -apple-system, sans-serif'
 
-    # 1. Calorie gauge
+    # 1. Calorie gauge (accounts for exercise: budget = tdee + burned)
     if tdee > 0:
-        remaining = max(0, tdee - total_cal)
-        pct = min(100, round((total_cal / tdee) * 100))
+        effective_budget = tdee + total_burned
+        remaining = max(0, effective_budget - total_cal)
+        pct = min(100, round((total_cal / effective_budget) * 100))
         cal_fig = go.Figure(go.Indicator(
             mode="gauge+number+delta",
             value=round(total_cal),
@@ -350,25 +356,38 @@ async def render_dashboard(user_id: str):
         )
         elements.append(cl.Plotly(name="macro_pie", figure=macro_fig, display="inline"))
 
-    # 3. Weekly calorie trend (if multi-day data exists)
+    # 3. Weekly calorie trend (if multi-day data exists) — shows consumed + burned
     from collections import defaultdict
-    days = defaultdict(float)
+    days_consumed = defaultdict(float)
+    days_burned = defaultdict(float)
     for m in all_meals:
         d = m.value.get("date", "")
         if d:
-            days[d] += m.value.get("calories", 0)
+            days_consumed[d] += m.value.get("calories", 0)
+    for e in all_exercises:
+        d = e.value.get("date", "")
+        if d:
+            days_burned[d] += e.value.get("calories_burned", 0)
 
-    if len(days) > 1:
-        sorted_days = sorted(days.items())[-7:]  # last 7 days
-        dates = [d[0] for d in sorted_days]
-        cals = [round(d[1]) for d in sorted_days]
+    all_dates = set(days_consumed.keys()) | set(days_burned.keys())
+    if len(all_dates) > 1:
+        sorted_dates = sorted(all_dates)[-7:]
+        consumed_vals = [round(days_consumed.get(d, 0)) for d in sorted_dates]
+        burned_vals = [round(days_burned.get(d, 0)) for d in sorted_dates]
+        net_vals = [c - b for c, b in zip(consumed_vals, burned_vals)]
 
         trend_fig = go.Figure()
         trend_fig.add_trace(go.Bar(
-            x=dates, y=cals, name="Calories",
+            x=sorted_dates, y=consumed_vals, name="Consumed",
             marker_color=_SKY,
             marker_line_width=0,
         ))
+        if any(b > 0 for b in burned_vals):
+            trend_fig.add_trace(go.Bar(
+                x=sorted_dates, y=[-b for b in burned_vals], name="Burned",
+                marker_color=_CORAL,
+                marker_line_width=0,
+            ))
         if tdee > 0:
             trend_fig.add_hline(
                 y=tdee, line_dash="dot", line_color=_CORAL, line_width=2,
@@ -506,14 +525,28 @@ async def render_dashboard(user_id: str):
                 profile_lines.append(f"Height: {h} cm")
         if "tdee" in profile:
             profile_lines.append(f"TDEE: {profile['tdee']} cal/day")
+        # Show target weight if set
+        if "target_weight_kg" in profile:
+            tw = float(profile["target_weight_kg"])
+            tw_str = f"{round(tw * 2.20462)} lbs" if units == "imperial" else f"{tw} kg"
+            td = profile.get("target_date", "")
+            goal_str = f"Goal: {tw_str}"
+            if td:
+                goal_str += f" by {td}"
+            profile_lines.append(goal_str)
         profile_text = " | ".join(profile_lines) if profile_lines else "*Profile incomplete*"
 
-    today_text = f"**Today:** {round(total_cal)} cal | {round(total_protein)}g protein | {round(total_carbs)}g carbs | {round(total_fat)}g fat"
+    today_text = f"**Today:** {round(total_cal)} cal consumed"
+    if total_burned > 0:
+        today_text += f" | {round(total_burned)} cal burned | {round(total_cal - total_burned)} net"
+    today_text += f" | {round(total_protein)}g protein | {round(total_carbs)}g carbs | {round(total_fat)}g fat"
     if tdee > 0:
-        remaining = round(tdee - total_cal)
+        remaining = round(tdee + total_burned - total_cal)
         today_text += f" | **{remaining} cal remaining**"
 
     meals_text = f"**Meals logged today:** {len(today_meals)}"
+    if today_exercises:
+        meals_text += f" | **Exercise:** {len(today_exercises)} session(s), {round(total_burned)} cal burned"
 
     dashboard_md = (
         f"## MacroMind Dashboard\n\n"
@@ -594,12 +627,73 @@ async def handle_message(message: cl.Message):
         try:
             payload = _json.loads(message.content[len("__ONBOARDING__:"):])
             _save_onboarding_from_overlay(payload, user_id)
-            await cl.Message(
-                content=(
-                    "**Profile saved!** Your daily calorie target has been calculated.\n\n"
-                    "Type anything to get started, or ask me a nutrition question!"
+
+            # Build a profile summary for the agent to use as a welcome
+            profile_items = list(_store.search((user_id, "profile")))
+            profile = {item.key: item.value.get("value", "") for item in profile_items}
+
+            units = profile.get("units", "imperial")
+            is_imp = units == "imperial"
+            w_kg = float(profile.get("weight_kg", 0))
+            h_cm = float(profile.get("height_cm", 0))
+            weight_str = f"{round(w_kg * 2.20462)} lbs" if is_imp else f"{w_kg} kg"
+            if is_imp:
+                total_in = round(h_cm / 2.54)
+                ft, inch = divmod(total_in, 12)
+                height_str = f"{ft}'{inch}\""
+            else:
+                height_str = f"{h_cm} cm"
+
+            summary_lines = [
+                f"Current weight: {weight_str}",
+                f"Height: {height_str}",
+                f"Age: {profile.get('age', '?')}",
+                f"Sex: {profile.get('sex', '?').capitalize()}",
+                f"Activity: {profile.get('activity_level', '?')}",
+                f"TDEE: {profile.get('tdee', '?')} cal/day",
+            ]
+            tw_kg = profile.get("target_weight_kg", "")
+            td = profile.get("target_date", "")
+            if tw_kg:
+                tw_str = f"{round(float(tw_kg) * 2.20462)} lbs" if is_imp else f"{tw_kg} kg"
+                summary_lines.append(f"Target weight: {tw_str}")
+            if td:
+                summary_lines.append(f"Target date: {td}")
+
+            profile_summary = " | ".join(summary_lines)
+
+            # Craft the welcome prompt for the agent
+            if tw_kg and td:
+                welcome_prompt = (
+                    f"Here is my profile: {profile_summary}. "
+                    f"Welcome me to MacroMind! Give me a brief personalized summary "
+                    f"of my profile and a high-level plan to reach my target weight "
+                    f"by my target date. Include the daily calorie deficit needed and "
+                    f"expected weekly weight loss rate. Keep it concise and motivating."
                 )
-            ).send()
+            elif tw_kg:
+                welcome_prompt = (
+                    f"Here is my profile: {profile_summary}. "
+                    f"Welcome me to MacroMind! Summarize my profile and give me a "
+                    f"brief plan to reach my target weight. Keep it concise."
+                )
+            else:
+                welcome_prompt = (
+                    f"Here is my profile: {profile_summary}. "
+                    f"Welcome me to MacroMind! Give me a brief personalized summary "
+                    f"of my profile and TDEE. Ask about my goals so you can help me "
+                    f"create a plan. Keep it concise and friendly."
+                )
+
+            # Invoke the agent for a personalized welcome
+            config = {"configurable": {"thread_id": cl.context.session.id}}
+            response = agent.invoke(
+                {"messages": [HumanMessage(content=welcome_prompt)], "user_id": user_id},
+                config=config,
+            )
+            ai_msg = response["messages"][-1]
+            await cl.Message(content=ai_msg.content).send()
+
         except Exception as e:
             logger.error(f"Onboarding parse error: {e}")
             await cl.Message(content="Something went wrong saving your profile. Please try again.").send()
@@ -672,6 +766,14 @@ def _save_onboarding_from_overlay(payload: dict, user_id: str):
     # Calculate TDEE
     bmr, tdee = calculate_tdee(weight_kg, height_cm, age_val, sex, activity)
 
+    # Target weight (optional)
+    target_weight_raw = payload.get("target_weight", "")
+    target_date = payload.get("target_date", "")
+    target_weight_kg = None
+    if target_weight_raw:
+        tw = float(target_weight_raw)
+        target_weight_kg = round(tw / 2.20462, 1) if is_imperial else round(tw, 1)
+
     # Store all fields
     ns = (user_id, "profile")
     _store.put(ns, "weight_kg", {"value": str(weight_kg)})
@@ -682,5 +784,9 @@ def _save_onboarding_from_overlay(payload: dict, user_id: str):
     _store.put(ns, "tdee", {"value": str(round(tdee))})
     _store.put(ns, "units", {"value": "imperial" if is_imperial else "metric"})
     _store.put(ns, "tone", {"value": tone})
+    if target_weight_kg is not None:
+        _store.put(ns, "target_weight_kg", {"value": str(target_weight_kg)})
+    if target_date:
+        _store.put(ns, "target_date", {"value": target_date})
 
     logger.info(f"Onboarding saved for {user_id}: TDEE={round(tdee)}, tone={tone}")

@@ -144,6 +144,30 @@ body.onboarding-mode #mm-onboarding {
   color: #ffffff;
 }
 
+/* ── Goals divider ───────────────────────────────────────────── */
+.mm-ob-divider {
+  text-align: center;
+  margin: 24px 0 16px;
+  position: relative;
+}
+.mm-ob-divider::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid #3A3A3C;
+}
+.mm-ob-divider span {
+  position: relative;
+  background: #1C1C1E;
+  padding: 0 12px;
+  color: #636366;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* ── Submit button ────────────────────────────────────────────── */
 .mm-ob-btn {
   width: 100%;

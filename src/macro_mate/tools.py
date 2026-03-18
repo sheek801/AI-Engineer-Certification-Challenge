@@ -257,30 +257,97 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         return "Unknown action. Use 'get', 'set', or 'tdee'."
 
     # ═══════════════════════════════════════════════════════════════════
-    # Tool 5 — Daily summary
+    # Tool 5 — Log exercise / calories burned
+    # ═══════════════════════════════════════════════════════════════════
+
+    @tool
+    def log_exercise(
+        user_id: str,
+        activity_name: str,
+        duration_minutes: float,
+        calories_burned: float,
+    ) -> str:
+        """Log an exercise session the user completed.
+
+        Use this tool when the user mentions working out, running, cycling,
+        walking, gym, swimming, yoga, or any physical activity.
+        Estimate calories burned if the user doesn't specify — use your
+        knowledge of typical calorie burn rates for common activities.
+
+        Args:
+            user_id: The user's ID.
+            activity_name: Name of the activity (e.g. "running", "cycling").
+            duration_minutes: Duration in minutes.
+            calories_burned: Estimated calories burned during the activity.
+        """
+        now = datetime.now()
+        namespace = (user_id, "exercise")
+        key = f"{activity_name}_{now.isoformat()}"
+
+        store.put(namespace, key, {
+            "text": f"{activity_name} for {duration_minutes} min: "
+                    f"{calories_burned} cal burned",
+            "activity_name": activity_name,
+            "duration_min": duration_minutes,
+            "calories_burned": calories_burned,
+            "date": now.strftime("%Y-%m-%d"),
+            "timestamp": now.isoformat(),
+        })
+
+        # Show updated remaining budget if TDEE is set
+        tdee_item = store.get((user_id, "profile"), "tdee")
+        budget_msg = ""
+        if tdee_item:
+            tdee = float(tdee_item.value.get("value", 0))
+            today = now.strftime("%Y-%m-%d")
+            # Sum today's food intake
+            all_meals = store.search((user_id, "consumption"), query="meal", limit=100)
+            today_cal = sum(
+                m.value.get("calories", 0) for m in all_meals
+                if m.value.get("date") == today
+            )
+            # Sum today's exercise burns (including this one)
+            all_ex = store.search((user_id, "exercise"), query="exercise", limit=100)
+            today_burned = sum(
+                e.value.get("calories_burned", 0) for e in all_ex
+                if e.value.get("date") == today
+            )
+            remaining = round(tdee + today_burned - today_cal)
+            budget_msg = f" | Remaining budget: {remaining} cal"
+
+        return (
+            f"Logged {activity_name} ({duration_minutes} min, "
+            f"{round(calories_burned)} cal burned){budget_msg}"
+        )
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Tool 6 — Daily summary
     # ═══════════════════════════════════════════════════════════════════
 
     @tool
     def calculate_daily_summary(user_id: str) -> str:
-        """Calculate a summary of today's nutrition intake vs targets.
+        """Calculate a summary of today's nutrition intake, exercise, and
+        remaining calorie budget vs targets.
 
-        Reads all meals logged today, sums up calories and macros,
-        and compares against the user's TDEE and macro targets.
+        Reads all meals and exercise logged today, sums up calories and
+        macros, and compares against the user's TDEE. Exercise calories
+        burned are added back to the daily budget.
 
         Args:
             user_id: The user's ID.
         """
         today = datetime.now().strftime("%Y-%m-%d")
 
-        # LOGIC: Search all consumption logs for this user, then filter
-        # to only today's entries. We use a broad query and filter by
-        # the "date" field we stored in Tool 3. store.search() returns
-        # up to `limit` results; 100 is generous for one day of eating.
+        # Meals
         all_meals = store.search((user_id, "consumption"), query="meal", limit=100)
         today_meals = [m for m in all_meals if m.value.get("date") == today]
 
-        if not today_meals:
-            return f"No meals logged for today ({today})."
+        # Exercise
+        all_exercises = store.search((user_id, "exercise"), query="exercise", limit=100)
+        today_exercises = [e for e in all_exercises if e.value.get("date") == today]
+
+        if not today_meals and not today_exercises:
+            return f"No meals or exercise logged for today ({today})."
 
         # Sum macros across all of today's meals
         total_cal = sum(m.value.get("calories", 0) for m in today_meals)
@@ -288,22 +355,32 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         total_carbs = sum(m.value.get("carbs_g", 0) for m in today_meals)
         total_fat = sum(m.value.get("fat_g", 0) for m in today_meals)
 
+        # Sum exercise calories burned
+        total_burned = sum(e.value.get("calories_burned", 0) for e in today_exercises)
+        net_cal = total_cal - total_burned
+
         summary = (
             f"Daily Summary for {today}:\n"
             f"  Meals logged: {len(today_meals)}\n"
-            f"  Calories: {round(total_cal)}\n"
+            f"  Calories consumed: {round(total_cal)}\n"
             f"  Protein:  {round(total_protein)}g\n"
             f"  Carbs:    {round(total_carbs)}g\n"
             f"  Fat:      {round(total_fat)}g"
         )
 
-        # LOGIC: If the user has a TDEE stored (from Tool 4), show how
-        # many calories remain. This is the payoff of storing TDEE in
-        # the profile — Tool 5 can read it without recalculating.
+        if today_exercises:
+            ex_names = [e.value.get("activity_name", "exercise") for e in today_exercises]
+            summary += (
+                f"\n  Exercise sessions: {len(today_exercises)} ({', '.join(ex_names)})\n"
+                f"  Calories burned:  {round(total_burned)}\n"
+                f"  Net calories:     {round(net_cal)}"
+            )
+
+        # Compare to TDEE — remaining budget includes exercise burn-back
         tdee_item = store.get((user_id, "profile"), "tdee")
         if tdee_item:
             tdee = float(tdee_item.value.get("value", 0))
-            remaining = tdee - total_cal
+            remaining = tdee + total_burned - total_cal
             summary += (f"\n  TDEE target: {round(tdee)}\n"
                         f"  Remaining:  {round(remaining)} cal")
 
@@ -324,8 +401,8 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
 
     @tool
     def analyze_progress(user_id: str) -> str:
-        """Retrieve all stored user data (profile, meals, weight history)
-        and return a structured summary for analysis.
+        """Retrieve all stored user data (profile, meals, exercise, weight
+        history) and return a structured summary for analysis.
 
         Use this tool when the user asks about their progress, trends,
         patterns, or wants a recap of their nutrition history.
@@ -335,18 +412,19 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         Args:
             user_id: The user's ID.
         """
-        from collections import defaultdict
+        from collections import defaultdict, Counter
+        from datetime import datetime as dt
 
         # ── 1. Pull the user's profile ──────────────────────────────
         profile_items = list(store.search((user_id, "profile")))
         profile = {item.key: item.value.get("value", "") for item in profile_items}
 
-        # ── 2. Pull ALL consumption logs ────────────────────────────
-        # limit=500 covers weeks of data. store.search needs a query
-        # string for the semantic index; "meal food" is broad enough
-        # to match any logged entry's "text" field.
+        # ── 2. Pull ALL consumption + exercise logs ─────────────────
         all_meals = list(store.search(
             (user_id, "consumption"), query="meal food", limit=500
+        ))
+        all_exercises = list(store.search(
+            (user_id, "exercise"), query="exercise activity", limit=500
         ))
 
         if not all_meals and not profile:
@@ -358,10 +436,13 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
             profile_lines = [f"  {k}: {v}" for k, v in profile.items()]
             sections.append("PROFILE:\n" + "\n".join(profile_lines))
 
-        # ── 4. Group meals by date and compute daily totals ─────────
-        # This is the key logic: the LLM can't do arithmetic reliably
-        # on raw meal lists, so we pre-compute the per-day totals here
-        # and hand the LLM structured numbers it can reason over.
+        # ── 4. Group meals by date ──────────────────────────────────
+        # Group exercises by date
+        exercise_by_date = defaultdict(list)
+        for e in all_exercises:
+            d = e.value.get("date", "unknown")
+            exercise_by_date[d].append(e.value)
+
         if all_meals:
             days = defaultdict(list)
             for m in all_meals:
@@ -377,10 +458,22 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
                 day_carb = sum(m.get("carbs_g", 0) for m in meals)
                 day_fat = sum(m.get("fat_g", 0) for m in meals)
 
+                # Exercise for this date
+                day_exercises = exercise_by_date.get(date, [])
+                day_burned = sum(e.get("calories_burned", 0) for e in day_exercises)
+                day_net = day_cal - day_burned
+
+                ex_str = ""
+                if day_exercises:
+                    ex_names = [e.get("activity_name", "exercise") for e in day_exercises]
+                    ex_str = (f"\n    Exercise: {', '.join(ex_names)} "
+                              f"({round(day_burned)} cal burned)\n"
+                              f"    Net calories: {round(day_net)}")
+
                 sections.append(
                     f"\n  {date} ({len(meals)} meals):\n"
-                    f"    Total: {round(day_cal)} cal, {round(day_pro)}g protein, "
-                    f"{round(day_carb)}g carbs, {round(day_fat)}g fat"
+                    f"    Consumed: {round(day_cal)} cal, {round(day_pro)}g protein, "
+                    f"{round(day_carb)}g carbs, {round(day_fat)}g fat{ex_str}"
                 )
                 for m in meals:
                     sections.append(
@@ -392,23 +485,130 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
             total_days = len(days)
             total_cal = sum(m.value.get("calories", 0) for m in all_meals)
             total_pro = sum(m.value.get("protein_g", 0) for m in all_meals)
+            total_burned = sum(e.value.get("calories_burned", 0) for e in all_exercises)
 
-            sections.append(
+            avg_cal = round(total_cal / total_days)
+            avg_burned = round(total_burned / total_days) if total_days else 0
+            avg_net = round((total_cal - total_burned) / total_days) if total_days else 0
+
+            avg_section = (
                 f"\nAVERAGES ({total_days} days):\n"
-                f"  Avg calories/day: {round(total_cal / total_days)}\n"
+                f"  Avg calories consumed/day: {avg_cal}\n"
                 f"  Avg protein/day:  {round(total_pro / total_days)}g"
             )
+            if total_burned > 0:
+                avg_section += (
+                    f"\n  Avg exercise burned/day:  {avg_burned}\n"
+                    f"  Avg net calories/day:     {avg_net}"
+                )
+            sections.append(avg_section)
 
-            # Compare to TDEE if available
+            # Compare to TDEE — use NET calories
             if "tdee" in profile:
                 tdee = float(profile["tdee"])
-                avg_cal = total_cal / total_days
-                diff = avg_cal - tdee
+                diff = avg_net - tdee
                 direction = "over" if diff > 0 else "under"
                 sections.append(
                     f"  TDEE target: {round(tdee)} cal/day\n"
-                    f"  Avg daily difference: {round(abs(diff))} cal {direction} target"
+                    f"  Avg daily net difference: {round(abs(diff))} cal {direction} target"
                 )
+
+            # ── 6. Weekday vs. weekend comparison (net calories) ──
+            weekday_nets = []
+            weekend_nets = []
+            for date_str, meals_list in days.items():
+                try:
+                    day_of_week = dt.strptime(date_str, "%Y-%m-%d").weekday()
+                except ValueError:
+                    continue
+                day_total = sum(m.get("calories", 0) for m in meals_list)
+                day_burn = sum(e.get("calories_burned", 0) for e in exercise_by_date.get(date_str, []))
+                day_net = day_total - day_burn
+                if day_of_week < 5:
+                    weekday_nets.append(day_net)
+                else:
+                    weekend_nets.append(day_net)
+
+            if weekday_nets and weekend_nets:
+                avg_weekday = round(sum(weekday_nets) / len(weekday_nets))
+                avg_weekend = round(sum(weekend_nets) / len(weekend_nets))
+                sections.append(
+                    f"\nWEEKDAY vs WEEKEND (net calories):\n"
+                    f"  Avg weekday net: {avg_weekday}\n"
+                    f"  Avg weekend net: {avg_weekend}\n"
+                    f"  Difference: {abs(avg_weekday - avg_weekend)} cal "
+                    f"({'higher on weekends' if avg_weekend > avg_weekday else 'higher on weekdays'})"
+                )
+
+            # ── 7. Most logged foods (top 5 by frequency) ────────
+            food_counts = Counter()
+            for m in all_meals:
+                name = m.value.get("food_name", "")
+                if name:
+                    food_counts[name.lower()] += 1
+            if food_counts:
+                top_foods = food_counts.most_common(5)
+                lines = [f"    {i+1}. {name} ({count}x)" for i, (name, count) in enumerate(top_foods)]
+                sections.append(f"\nMOST LOGGED FOODS:\n" + "\n".join(lines))
+
+            # ── 8. Meal type gaps ─────────────────────────────────
+            meal_type_by_day = defaultdict(set)
+            for m in all_meals:
+                date = m.value.get("date", "")
+                mt = m.value.get("meal_type", "")
+                if date and mt:
+                    meal_type_by_day[date].add(mt)
+
+            if meal_type_by_day:
+                total_tracked_days = len(meal_type_by_day)
+                type_day_counts = defaultdict(int)
+                for day_types in meal_type_by_day.values():
+                    for t in day_types:
+                        type_day_counts[t] += 1
+
+                gap_lines = []
+                for mt in ["breakfast", "lunch", "dinner"]:
+                    count = type_day_counts.get(mt, 0)
+                    if count < total_tracked_days:
+                        gap_lines.append(
+                            f"    {mt.capitalize()}: logged {count} of {total_tracked_days} days"
+                        )
+                if gap_lines:
+                    sections.append(f"\nMEAL GAPS (skipped meals):\n" + "\n".join(gap_lines))
+
+            # ── 9. Macro consistency (protein) ────────────────────
+            daily_proteins = []
+            for date_str, meals_list in days.items():
+                day_pro = sum(m.get("protein_g", 0) for m in meals_list)
+                daily_proteins.append(day_pro)
+
+            if len(daily_proteins) > 2:
+                avg_pro = sum(daily_proteins) / len(daily_proteins)
+                variance = sum((p - avg_pro) ** 2 for p in daily_proteins) / len(daily_proteins)
+                std_dev = variance ** 0.5
+                consistency = "consistent" if std_dev < 20 else "inconsistent" if std_dev > 40 else "somewhat variable"
+                sections.append(
+                    f"\nPROTEIN CONSISTENCY:\n"
+                    f"  Avg daily protein: {round(avg_pro)}g\n"
+                    f"  Variation: {consistency} (std dev: {round(std_dev)}g)"
+                )
+
+        # ── 10. Exercise summary ──────────────────────────────────
+        if all_exercises:
+            ex_counter = Counter()
+            total_ex_cal = 0
+            total_ex_min = 0
+            for e in all_exercises:
+                ex_counter[e.value.get("activity_name", "exercise")] += 1
+                total_ex_cal += e.value.get("calories_burned", 0)
+                total_ex_min += e.value.get("duration_min", 0)
+            ex_lines = [f"    {name}: {count}x" for name, count in ex_counter.most_common()]
+            sections.append(
+                f"\nEXERCISE SUMMARY ({len(all_exercises)} sessions):\n"
+                f"  Total calories burned: {round(total_ex_cal)}\n"
+                f"  Total duration: {round(total_ex_min)} min\n"
+                + "\n".join(ex_lines)
+            )
 
         return "\n".join(sections)
 
@@ -499,6 +699,7 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         search_web,
         log_consumption,
         manage_user_profile,
+        log_exercise,
         calculate_daily_summary,
         analyze_progress,
         search_usda_foods,

@@ -153,6 +153,15 @@
       '        <option value="tough love">Tough Love</option>',
       '      </select>',
       '    </div>',
+      '    <div class="mm-ob-divider"><span>Goals (optional)</span></div>',
+      '    <div class="mm-ob-row">',
+      '      <label id="mm-ob-target-weight-label">Target Weight (lbs)</label>',
+      '      <input type="number" id="mm-ob-target-weight" placeholder="e.g. 170" />',
+      '    </div>',
+      '    <div class="mm-ob-row">',
+      '      <label>Target Date</label>',
+      '      <input type="date" id="mm-ob-target-date" />',
+      '    </div>',
       '    <button type="submit" class="mm-ob-btn">Save &amp; Start →</button>',
       '  </form>',
       '</div>'
@@ -172,6 +181,10 @@
         imp ? "e.g. 185" : "e.g. 84";
       document.getElementById("mm-ob-height").placeholder =
         imp ? 'e.g. 70 (5\'10" = 70)' : "e.g. 178";
+      document.getElementById("mm-ob-target-weight-label").textContent =
+        imp ? "Target Weight (lbs)" : "Target Weight (kg)";
+      document.getElementById("mm-ob-target-weight").placeholder =
+        imp ? "e.g. 170" : "e.g. 77";
     });
 
     // Form submission
@@ -183,13 +196,15 @@
 
   function submitOnboarding() {
     var payload = {
-      units:    document.getElementById("mm-ob-units").value,
-      weight:   document.getElementById("mm-ob-weight").value,
-      height:   document.getElementById("mm-ob-height").value,
-      age:      document.getElementById("mm-ob-age").value,
-      sex:      document.getElementById("mm-ob-sex").value,
-      activity: document.getElementById("mm-ob-activity").value,
-      tone:     document.getElementById("mm-ob-tone").value,
+      units:         document.getElementById("mm-ob-units").value,
+      weight:        document.getElementById("mm-ob-weight").value,
+      height:        document.getElementById("mm-ob-height").value,
+      age:           document.getElementById("mm-ob-age").value,
+      sex:           document.getElementById("mm-ob-sex").value,
+      activity:      document.getElementById("mm-ob-activity").value,
+      tone:          document.getElementById("mm-ob-tone").value,
+      target_weight: document.getElementById("mm-ob-target-weight").value || "",
+      target_date:   document.getElementById("mm-ob-target-date").value || "",
     };
 
     if (!payload.weight || !payload.height || !payload.age) {
