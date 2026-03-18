@@ -24,7 +24,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from macro_mate.config import LLM_MODEL
-from macro_mate.prompts import SYSTEM_PROMPT
+from macro_mate.prompts import SYSTEM_PROMPT, get_system_prompt
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -70,7 +70,16 @@ def build_graph(tools: list, checkpointer=None, store=None):
     # to the existing conversation history in the state.
     def assistant_node(state: MacroMateState):
         user_id = state.get("user_id", "default_user")
-        prompt = SYSTEM_PROMPT + f"\n\nCurrent user_id: {user_id}"
+        # Read tone preference from the persistent store if available
+        tone = "balanced"
+        if store is not None:
+            try:
+                tone_item = store.get((user_id, "profile"), "tone")
+                if tone_item and tone_item.value:
+                    tone = tone_item.value.get("value", "balanced")
+            except Exception:
+                pass
+        prompt = get_system_prompt(tone) + f"\n\nCurrent user_id: {user_id}"
         messages = [SystemMessage(content=prompt)] + state["messages"]
         response = llm_with_tools.invoke(messages)
         return {"messages": [response]}

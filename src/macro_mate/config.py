@@ -26,7 +26,7 @@ os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
 os.environ.setdefault("LANGCHAIN_PROJECT", "macromind")
 
 # ── LLM / Embedding model names ──────────────────────────────────────
-LLM_MODEL: str = "gpt-4o-mini"
+LLM_MODEL: str = "gpt-4o"
 EMBEDDING_MODEL: str = "text-embedding-3-small"
 EMBEDDING_DIMS: int = 1536
 
