@@ -12,6 +12,14 @@ img[src*="/logo"] {
   display: none !important;
 }
 
+/* ── Hide top-right settings entry (onboarding is full-screen only) ─ */
+button[aria-label*="settings" i],
+button[data-testid="chat-settings"],
+a[aria-label*="settings" i],
+[data-testid="chat-settings-sidebar"] {
+  display: none !important;
+}
+
 /* ── Dashboard: hide composer ─────────────────────────────────── */
 body.dashboard-mode #message-composer,
 body.onboarding-mode #message-composer {

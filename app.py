@@ -13,7 +13,6 @@ import logging
 from datetime import datetime
 
 import chainlit as cl
-from chainlit.input_widget import Select, NumberInput
 from langchain_core.messages import HumanMessage
 
 logger = logging.getLogger(__name__)
@@ -86,163 +85,8 @@ def _check_profile_complete(user_id: str) -> bool:
         return False
     profile_items = list(_store.search((user_id, "profile")))
     profile = {item.key: item.value.get("value", "") for item in profile_items}
-    required = {"weight_kg", "height_cm", "age", "sex", "activity_level"}
-    return all(f in profile for f in required)
-
-
-async def _show_onboarding_settings():
-    """Show the profile setup form as a ChatSettings panel."""
-    settings = cl.ChatSettings([
-        Select(
-            id="units",
-            label="Units",
-            values=["Imperial (lbs, in)", "Metric (kg, cm)"],
-            initial_index=0,
-            description="Choose your preferred measurement system",
-        ),
-        NumberInput(
-            id="weight",
-            label="Weight",
-            placeholder="e.g. 165 (lbs) or 75 (kg)",
-            description="Your current body weight",
-        ),
-        NumberInput(
-            id="height",
-            label="Height",
-            placeholder="e.g. 70 (inches) or 178 (cm)",
-            description="Your height — for inches: 5'10\" = 70",
-        ),
-        NumberInput(
-            id="age",
-            label="Age",
-            placeholder="e.g. 30",
-            description="Your age in years",
-        ),
-        Select(
-            id="sex",
-            label="Biological Sex",
-            values=["Male", "Female"],
-            initial_index=0,
-            description="Used for calorie calculation (Mifflin-St Jeor)",
-        ),
-        Select(
-            id="activity",
-            label="Activity Level",
-            values=[
-                "Sedentary (desk job, little exercise)",
-                "Light (exercise 1-3 days/week)",
-                "Moderate (exercise 3-5 days/week)",
-                "Active (exercise 6-7 days/week)",
-                "Very Active (intense daily training)",
-            ],
-            initial_index=2,
-            description="How active are you on a typical week?",
-        ),
-    ])
-    await settings.send()
-
-
-def _process_onboarding(settings: dict, user_id: str) -> str | None:
-    """Validate settings, convert units, store profile, return error or None."""
-    units = settings.get("units", "Imperial (lbs, in)")
-    is_imperial = "Imperial" in units
-
-    # ── Validate ──────────────────────────────────────────────────
-    weight_raw = settings.get("weight")
-    height_raw = settings.get("height")
-    age_raw = settings.get("age")
-
-    if not weight_raw or not height_raw or not age_raw:
-        return "Please fill in **all** fields (weight, height, age) then click Confirm again."
-
-    try:
-        weight_val = float(weight_raw)
-        height_val = float(height_raw)
-        age_val = int(float(age_raw))
-    except (ValueError, TypeError):
-        return "Weight, height, and age must be numbers. Please correct and try again."
-
-    if weight_val <= 0 or height_val <= 0 or age_val <= 0:
-        return "Values must be positive numbers. Please correct and try again."
-
-    # ── Convert to metric ─────────────────────────────────────────
-    if is_imperial:
-        weight_kg = round(weight_val / 2.20462, 1)   # lbs → kg
-        height_cm = round(height_val * 2.54, 1)       # inches → cm
-    else:
-        weight_kg = round(weight_val, 1)
-        height_cm = round(height_val, 1)
-
-    sex_raw = settings.get("sex", "Male")
-    sex = sex_raw.lower()
-
-    activity_raw = settings.get("activity", "Moderate (exercise 3-5 days/week)")
-    activity_map = {
-        "Sedentary": "sedentary",
-        "Light": "light",
-        "Moderate": "moderate",
-        "Active": "active",
-        "Very Active": "very_active",
-    }
-    activity = "moderate"
-    for label, key in activity_map.items():
-        if activity_raw.startswith(label):
-            activity = key
-            break
-
-    # ── Calculate TDEE ────────────────────────────────────────────
-    bmr, tdee = calculate_tdee(weight_kg, height_cm, age_val, sex, activity)
-
-    # ── Store in PersistentStore ──────────────────────────────────
-    ns = (user_id, "profile")
-    _store.put(ns, "weight_kg", {"value": str(weight_kg)})
-    _store.put(ns, "height_cm", {"value": str(height_cm)})
-    _store.put(ns, "age", {"value": str(age_val)})
-    _store.put(ns, "sex", {"value": sex})
-    _store.put(ns, "activity_level", {"value": activity})
-    _store.put(ns, "tdee", {"value": str(round(tdee))})
-    # Store unit preference for display
-    _store.put(ns, "units", {"value": "imperial" if is_imperial else "metric"})
-
-    # ── Build confirmation ────────────────────────────────────────
-    if is_imperial:
-        w_display = f"{weight_val} lbs ({weight_kg} kg)"
-        h_display = f"{height_val} in ({height_cm} cm)"
-    else:
-        w_display = f"{weight_kg} kg"
-        h_display = f"{height_cm} cm"
-
-    cl.user_session.set("onboarding_complete", True)
-    return None  # success — no message needed
-
-
-@cl.on_settings_update
-async def on_settings_update(settings: dict):
-    """Called when the user submits the profile settings form.
-
-    New users (onboarding): show confirmation (starters already cleared).
-    Returning users: save silently so starters are NOT cleared.
-    """
-    user = cl.user_session.get("user")
-    user_id = user.identifier if user else "default_user"
-
-    if _store is None:
-        return
-
-    result = _process_onboarding(settings, user_id)
-    if result is not None:
-        # Validation error — must notify the user
-        await cl.Message(content=result).send()
-    elif cl.user_session.get("onboarding_welcome_shown"):
-        # New user just finished onboarding — show confirmation
-        await cl.Message(
-            content=(
-                "**Profile saved!** Your daily calorie target has been calculated.\n\n"
-                "Start a **New Chat** (pencil icon at top left) to see your "
-                "quick action buttons, or just type a message to get started!"
-            )
-        ).send()
-    # Returning users updating profile → save silently, starters preserved
+    required = {"units", "weight_kg", "height_cm", "age", "sex", "activity_level"}
+    return all(profile.get(f, "").strip() for f in required)
 
 
 # ── Dashboard rendering ──────────────────────────────────────────────
@@ -626,7 +470,11 @@ async def handle_message(message: cl.Message):
     if message.content.startswith("__ONBOARDING__:"):
         try:
             payload = _json.loads(message.content[len("__ONBOARDING__:"):])
-            _save_onboarding_from_overlay(payload, user_id)
+            error = _save_onboarding_from_overlay(payload, user_id)
+            if error:
+                await cl.Message(content=error).send()
+                await cl.Message(content="MACROMIND_ONBOARDING_START").send()
+                return
 
             # Build a profile summary for the agent to use as a welcome
             profile_items = list(_store.search((user_id, "profile")))
@@ -730,20 +578,37 @@ async def handle_message(message: cl.Message):
     await cl.Message(content=ai_message.content).send()
 
 
-def _save_onboarding_from_overlay(payload: dict, user_id: str):
-    """Parse the onboarding JSON from the JS overlay and save to store."""
+def _save_onboarding_from_overlay(payload: dict, user_id: str) -> str | None:
+    """Parse onboarding JSON, validate it, and save profile fields."""
     if _store is None:
-        return
+        return "Storage is not available yet. Please try again in a few seconds."
 
-    units_raw = payload.get("units", "imperial")
-    is_imperial = "imperial" in units_raw.lower()
+    required_fields = ("units", "weight", "height", "age", "sex", "activity")
+    missing = [field for field in required_fields if str(payload.get(field, "")).strip() == ""]
+    if missing:
+        return "Please fill in all required onboarding fields before continuing."
 
-    weight_val = float(payload.get("weight", 0))
-    height_val = float(payload.get("height", 0))
-    age_val = int(float(payload.get("age", 0)))
-    sex = payload.get("sex", "male").lower()
-    activity_raw = payload.get("activity", "moderate")
-    tone = payload.get("tone", "balanced").lower()
+    units_raw = str(payload.get("units", "imperial")).strip().lower()
+    is_imperial = "imperial" in units_raw
+
+    try:
+        weight_val = float(payload.get("weight", 0))
+        height_val = float(payload.get("height", 0))
+        age_val = int(float(payload.get("age", 0)))
+    except (TypeError, ValueError):
+        return "Weight, height, and age must be valid numbers."
+
+    if weight_val <= 0 or height_val <= 0 or age_val <= 0:
+        return "Weight, height, and age must all be positive values."
+
+    sex = str(payload.get("sex", "male")).strip().lower()
+    if sex not in {"male", "female"}:
+        return "Biological sex must be either Male or Female."
+
+    activity_raw = str(payload.get("activity", "moderate")).strip().lower()
+    tone_raw = str(payload.get("tone", "balanced")).strip().lower()
+    tone_map = {"supportive": "supportive", "balanced": "balanced", "tough love": "tough love"}
+    tone = tone_map.get(tone_raw, "balanced")
 
     # Convert to metric for storage
     if is_imperial:
@@ -761,18 +626,32 @@ def _save_onboarding_from_overlay(payload: dict, user_id: str):
         "active": "active",
         "very active": "very_active",
     }
-    activity = activity_map.get(activity_raw.lower().split("(")[0].strip(), "moderate")
+    activity = activity_map.get(activity_raw.split("(")[0].strip(), "moderate")
 
     # Calculate TDEE
     bmr, tdee = calculate_tdee(weight_kg, height_cm, age_val, sex, activity)
 
     # Target weight (optional)
-    target_weight_raw = payload.get("target_weight", "")
-    target_date = payload.get("target_date", "")
+    target_weight_raw = str(payload.get("target_weight", "")).strip()
+    target_date = str(payload.get("target_date", "")).strip()
+    if bool(target_weight_raw) != bool(target_date):
+        return "Please provide both target weight and target date, or leave both blank."
+
     target_weight_kg = None
     if target_weight_raw:
-        tw = float(target_weight_raw)
+        try:
+            tw = float(target_weight_raw)
+        except ValueError:
+            return "Target weight must be a valid number."
+        if tw <= 0:
+            return "Target weight must be a positive number."
         target_weight_kg = round(tw / 2.20462, 1) if is_imperial else round(tw, 1)
+        try:
+            goal_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        except ValueError:
+            return "Target date must use a valid YYYY-MM-DD date."
+        if goal_date <= datetime.now().date():
+            return "Target date must be in the future."
 
     # Store all fields
     ns = (user_id, "profile")
@@ -786,7 +665,11 @@ def _save_onboarding_from_overlay(payload: dict, user_id: str):
     _store.put(ns, "tone", {"value": tone})
     if target_weight_kg is not None:
         _store.put(ns, "target_weight_kg", {"value": str(target_weight_kg)})
-    if target_date:
         _store.put(ns, "target_date", {"value": target_date})
+    else:
+        # Clear stale target values when user does not set goals.
+        _store.put(ns, "target_weight_kg", {"value": ""})
+        _store.put(ns, "target_date", {"value": ""})
 
     logger.info(f"Onboarding saved for {user_id}: TDEE={round(tdee)}, tone={tone}")
+    return None

@@ -94,7 +94,7 @@ reaction_on_message_received = false
 # Name of the assistant.
 name = "MacroMind"
 
-# default_theme = "dark"
+default_theme = "dark"
 
 # Force a specific language for all users (e.g., "en-US", "he-IL", "fr-FR")
 # If not set, the browser's language will be used
@@ -104,8 +104,8 @@ name = "MacroMind"
 
 # default_sidebar_state = "open"
 
-# Chat settings display location: "message_composer" (default) or "sidebar" (header)
-chat_settings_location = "sidebar"
+# Chat settings location; keep in composer so no header settings tab appears.
+chat_settings_location = "message_composer"
 
 # Default state of chat settings sidebar when location is "sidebar"
 default_chat_settings_open = false

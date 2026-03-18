@@ -207,48 +207,74 @@
       target_date:   document.getElementById("mm-ob-target-date").value || "",
     };
 
-    if (!payload.weight || !payload.height || !payload.age) {
-      alert("Please fill in all fields.");
+    if (!payload.units || !payload.weight || !payload.height || !payload.age || !payload.sex || !payload.activity) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+    if ((payload.target_weight && !payload.target_date) || (!payload.target_weight && payload.target_date)) {
+      alert("Please provide both target weight and target date, or leave both blank.");
+      return;
+    }
+
+    var sent = sendOnboardingPayload(payload);
+    if (!sent) {
+      alert("Could not submit onboarding yet. Please wait one second and try again.");
       return;
     }
 
     onboardingCompleted = true;
-
-    // Watch for the __ONBOARDING__: payload message and hide it immediately
     watchAndHidePayload();
-
-    // Remove the overlay (hides marker first, then removes onboarding-mode)
     removeOnboarding();
+  }
 
-    // Send the payload as a chat message (intercepted by handle_message in Python)
-    setTimeout(function () {
-      var chatInput = document.getElementById("chat-input");
-      if (chatInput) {
+  function sendOnboardingPayload(payload) {
+    var message = "__ONBOARDING__:" + JSON.stringify(payload);
+    var chatInput =
+      document.getElementById("chat-input") ||
+      document.querySelector('#chat-input textarea') ||
+      document.querySelector('textarea#chat-input') ||
+      document.querySelector('textarea[placeholder*="message" i]') ||
+      document.querySelector('textarea[aria-label*="message" i]') ||
+      document.querySelector('textarea');
+    if (!chatInput) return false;
+
+    try {
+      if ("value" in chatInput) {
         var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLTextAreaElement.prototype, "value"
+          window.HTMLTextAreaElement.prototype,
+          "value"
         ).set;
-        nativeInputValueSetter.call(
-          chatInput,
-          "__ONBOARDING__:" + JSON.stringify(payload)
-        );
+        nativeInputValueSetter.call(chatInput, message);
         chatInput.dispatchEvent(new Event("input", { bubbles: true }));
-
-        setTimeout(function () {
-          var sendBtn = document.querySelector(
-            'button[data-testid="send-button"], button[type="submit"][aria-label]'
-          );
-          if (sendBtn) {
-            sendBtn.click();
-          } else {
-            chatInput.dispatchEvent(
-              new KeyboardEvent("keydown", {
-                key: "Enter", code: "Enter", bubbles: true
-              })
-            );
-          }
-        }, 100);
+      } else if (chatInput.isContentEditable) {
+        chatInput.textContent = message;
+        chatInput.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        return false;
       }
-    }, 200);
+    } catch (e) {
+      return false;
+    }
+
+    setTimeout(function () {
+      var sendBtn =
+        document.querySelector('button[data-testid="send-button"]') ||
+        document.querySelector('button[aria-label*="send" i]') ||
+        document.querySelector('button[type="submit"]');
+      if (sendBtn) {
+        sendBtn.click();
+        return;
+      }
+      chatInput.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true
+        })
+      );
+    }, 80);
+
+    return true;
   }
 
   function removeOnboarding() {
