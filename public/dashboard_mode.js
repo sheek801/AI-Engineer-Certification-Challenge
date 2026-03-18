@@ -13,6 +13,7 @@
   var onboardingShown = false;
   var onboardingCompleted = false;
   var bootGuardActive = true;
+  var sidebarNavInjected = false;
 
   /* ── Dashboard detection ────────────────────────────────────────── */
   function dashboardInDom() {
@@ -134,7 +135,7 @@
 
     el.innerHTML = [
       '<div class="mm-ob-inner">',
-      '  <div class="mm-ob-emoji">🍎</div>',
+      '  <div class="mm-ob-emoji">🥗</div>',
       '  <h1 class="mm-ob-title">Welcome to MacroMind</h1>',
       '  <p class="mm-ob-sub">Let\'s set up your profile to get started.</p>',
       '  <form id="mm-ob-form" class="mm-ob-form">',
@@ -327,6 +328,8 @@
 
   /* ── Main state machine ─────────────────────────────────────────── */
   function applyState() {
+    injectSidebarModeNav();
+
     // ── Dashboard detection ──
     var isDash = dashboardInDom();
     if (isDash) {
@@ -359,6 +362,95 @@
     if (!onboardingNeeded() && chatHasRendered()) {
       releaseBootGuard();
     }
+
+    updateSidebarModeNavState();
+  }
+
+  function injectSidebarModeNav() {
+    if (sidebarNavInjected || document.getElementById("mm-mode-nav")) return;
+    var sidebar = document.querySelector('[data-testid="sidebar"]') || document.querySelector("aside");
+    if (!sidebar) return;
+
+    var host =
+      sidebar.querySelector('[data-testid="sidebar-content"]') ||
+      sidebar.querySelector(".flex.flex-col") ||
+      sidebar;
+    if (!host) return;
+
+    var nav = document.createElement("div");
+    nav.id = "mm-mode-nav";
+    nav.innerHTML = [
+      '<div class="mm-mode-title">Workspace</div>',
+      '<button type="button" class="mm-mode-btn" data-mm-profile="Chat">Chat</button>',
+      '<button type="button" class="mm-mode-btn" data-mm-profile="Dashboard">Dashboard</button>'
+    ].join("");
+    host.prepend(nav);
+
+    var btns = nav.querySelectorAll(".mm-mode-btn");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener("click", function (e) {
+        var target = e.currentTarget.getAttribute("data-mm-profile");
+        switchProfileViaDropdown(target);
+      });
+    }
+
+    sidebarNavInjected = true;
+    updateSidebarModeNavState();
+  }
+
+  function updateSidebarModeNavState() {
+    var nav = document.getElementById("mm-mode-nav");
+    if (!nav) return;
+    var current = getCurrentProfileName();
+    var btns = nav.querySelectorAll(".mm-mode-btn");
+    for (var i = 0; i < btns.length; i++) {
+      var active = btns[i].getAttribute("data-mm-profile") === current;
+      btns[i].classList.toggle("active", !!active);
+    }
+  }
+
+  function getCurrentProfileName() {
+    if (dashboardActive) return "Dashboard";
+    var trigger = findProfileTrigger();
+    if (!trigger) return "Chat";
+    var text = (trigger.textContent || "").toLowerCase();
+    if (text.indexOf("dashboard") !== -1) return "Dashboard";
+    return "Chat";
+  }
+
+  function findProfileTrigger() {
+    var candidates = document.querySelectorAll(
+      'button[aria-haspopup="listbox"], button[role="combobox"], [role="combobox"]'
+    );
+    for (var i = 0; i < candidates.length; i++) {
+      var t = (candidates[i].textContent || "").toLowerCase();
+      if (t.indexOf("chat") !== -1 || t.indexOf("dashboard") !== -1) {
+        return candidates[i];
+      }
+    }
+    return null;
+  }
+
+  function switchProfileViaDropdown(targetProfile) {
+    var current = getCurrentProfileName();
+    if (current === targetProfile) return;
+
+    var trigger = findProfileTrigger();
+    if (!trigger || !trigger.click) return;
+    trigger.click();
+
+    setTimeout(function () {
+      var options = document.querySelectorAll(
+        '[role="option"], li[role="option"], [data-testid="select-option"], button, li, div'
+      );
+      for (var i = 0; i < options.length; i++) {
+        var txt = (options[i].textContent || "").trim().toLowerCase();
+        if (txt === targetProfile.toLowerCase()) {
+          if (options[i].click) options[i].click();
+          return;
+        }
+      }
+    }, 60);
   }
 
   function chatHasRendered() {

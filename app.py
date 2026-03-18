@@ -90,6 +90,20 @@ def _check_profile_complete(user_id: str) -> bool:
     return all(profile.get(f, "").strip() for f in required)
 
 
+def _get_chat_thread_id() -> str:
+    """Return the persistent chat thread id for this session.
+
+    This keeps Chat context when switching between Chat and Dashboard profiles.
+    A true "New Chat" action starts a new session and receives a fresh id.
+    """
+    stored = cl.user_session.get("chat_thread_id")
+    if stored:
+        return stored
+    fallback = cl.context.session.id
+    cl.user_session.set("chat_thread_id", fallback)
+    return fallback
+
+
 # ── Dashboard rendering ──────────────────────────────────────────────
 
 async def render_dashboard(user_id: str):
@@ -443,6 +457,9 @@ async def start():
         await render_dashboard(user_id)
         return
 
+    # Ensure chat mode has a stable thread id across profile switches.
+    _get_chat_thread_id()
+
     # Check if this user has a complete profile already
     profile_complete = _check_profile_complete(user_id)
 
@@ -542,7 +559,7 @@ async def handle_message(message: cl.Message):
             # Invoke the agent for a personalized welcome.
             # Run in a worker thread + timeout to avoid a blank UI if model call is slow.
             try:
-                config = {"configurable": {"thread_id": cl.context.session.id}}
+                config = {"configurable": {"thread_id": _get_chat_thread_id()}}
                 response = await asyncio.wait_for(
                     asyncio.to_thread(
                         agent.invoke,
@@ -582,7 +599,7 @@ async def handle_message(message: cl.Message):
     # ── Chat mode ─────────────────────────────────────────────────
     config = {
         "configurable": {
-            "thread_id": cl.context.session.id,
+            "thread_id": _get_chat_thread_id(),
         }
     }
 

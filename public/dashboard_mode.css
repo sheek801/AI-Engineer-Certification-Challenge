@@ -20,6 +20,52 @@ a[aria-label*="settings" i],
   display: none !important;
 }
 
+/* Hide top profile dropdown; we expose sidebar mode buttons instead. */
+button[data-testid="chat-profile-selector"],
+[data-testid="chat-profile-selector"],
+button[aria-label*="chat profile" i],
+button[aria-label*="profile" i]:has(span),
+[role="combobox"]:has(span) {
+  display: none !important;
+}
+
+/* Sidebar mode nav */
+#mm-mode-nav {
+  margin: 8px 8px 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(44, 44, 46, 0.85);
+  border: 1px solid #3a3a3c;
+  display: grid;
+  gap: 8px;
+}
+
+.mm-mode-title {
+  font-size: 0.72rem;
+  color: #a1a1a6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.mm-mode-btn {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #3a3a3c;
+  background: #1c1c1e;
+  color: #f2f2f7;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.mm-mode-btn.active {
+  border-color: #4ecdc4;
+  background: rgba(78, 205, 196, 0.16);
+  color: #d5fbf8;
+}
+
 /* ── Dashboard: hide composer ─────────────────────────────────── */
 body.dashboard-mode #message-composer,
 body.onboarding-mode #message-composer {
