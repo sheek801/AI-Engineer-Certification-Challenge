@@ -239,9 +239,28 @@ async def render_dashboard(user_id: str):
                 marker_line_width=0,
             ))
         if tdee > 0:
+            # If user has a weight loss target, show Target Intake line instead of TDEE
+            tw_kg = profile.get("target_weight_kg", "")
+            td_str = profile.get("target_date", "")
+            if tw_kg and td_str and tw_kg.strip() and td_str.strip():
+                try:
+                    w_kg = float(profile.get("weight_kg", 0))
+                    t_kg = float(tw_kg)
+                    goal_date = datetime.strptime(td_str, "%Y-%m-%d")
+                    days_left = max(1, (goal_date - datetime.now()).days)
+                    total_deficit = (w_kg - t_kg) * 7700  # ~7700 cal per kg
+                    daily_deficit = min(total_deficit / days_left, 1000)  # cap at 1000 cal/day
+                    target_intake = round(tdee - daily_deficit)
+                    ref_label = f"Target: {target_intake}"
+                except (ValueError, TypeError):
+                    target_intake = tdee
+                    ref_label = f"TDEE: {round(tdee)}"
+            else:
+                target_intake = tdee
+                ref_label = f"TDEE: {round(tdee)}"
             trend_fig.add_hline(
-                y=tdee, line_dash="dot", line_color=_CORAL, line_width=2,
-                annotation_text=f"TDEE: {round(tdee)}",
+                y=target_intake, line_dash="dot", line_color=_CORAL, line_width=2,
+                annotation_text=ref_label,
                 annotation_font=dict(color=_CORAL, size=12, family=_FONT),
             )
         trend_fig.update_layout(
@@ -785,39 +804,40 @@ def _seed_demo_data(user_id: str):
         _store.put(ns_profile, "target_weight_kg", {"value": "72.6"})
         _store.put(ns_profile, "target_date", {"value": "2026-06-01"})
 
-    # Realistic meal templates: (food_name, calories, protein, carbs, fat, meal_type)
+    # Realistic meal templates for a 170 lb male targeting ~2200-2500 cal/day, ~130-150g protein
+    # (food_name, calories, protein, carbs, fat, meal_type)
     breakfasts = [
-        ("scrambled eggs with toast", 380, 22, 28, 18, "breakfast"),
-        ("Greek yogurt with granola and berries", 350, 20, 45, 10, "breakfast"),
-        ("oatmeal with banana and peanut butter", 420, 14, 58, 16, "breakfast"),
-        ("avocado toast with egg", 390, 16, 32, 22, "breakfast"),
-        ("protein smoothie with spinach", 310, 30, 35, 6, "breakfast"),
-        ("bagel with cream cheese", 360, 12, 52, 14, "breakfast"),
+        ("4-egg omelet with cheese and veggies", 520, 38, 8, 36, "breakfast"),
+        ("Greek yogurt parfait with granola and berries", 450, 30, 52, 14, "breakfast"),
+        ("oatmeal with protein powder and banana", 480, 32, 62, 12, "breakfast"),
+        ("avocado toast with 2 eggs and turkey bacon", 540, 34, 36, 28, "breakfast"),
+        ("protein smoothie with banana and peanut butter", 460, 36, 42, 16, "breakfast"),
+        ("breakfast burrito with eggs and sausage", 580, 32, 44, 28, "breakfast"),
     ]
     lunches = [
-        ("grilled chicken Caesar salad", 480, 42, 18, 26, "lunch"),
-        ("turkey and avocado wrap", 520, 35, 42, 22, "lunch"),
-        ("chicken burrito bowl", 620, 38, 65, 20, "lunch"),
-        ("tuna salad sandwich", 450, 32, 38, 18, "lunch"),
-        ("poke bowl with brown rice", 550, 30, 55, 20, "lunch"),
-        ("grilled chicken sandwich", 510, 36, 40, 22, "lunch"),
+        ("grilled chicken Caesar salad with croutons", 620, 48, 24, 32, "lunch"),
+        ("turkey and avocado wrap with side salad", 640, 42, 48, 26, "lunch"),
+        ("chicken burrito bowl with rice and beans", 720, 44, 72, 22, "lunch"),
+        ("tuna melt sandwich with soup", 580, 40, 42, 24, "lunch"),
+        ("poke bowl with brown rice and edamame", 650, 38, 62, 22, "lunch"),
+        ("grilled chicken sandwich with sweet potato fries", 680, 42, 58, 26, "lunch"),
     ]
     dinners = [
-        ("salmon with brown rice and broccoli", 580, 40, 48, 20, "dinner"),
-        ("grilled steak with sweet potato", 650, 45, 40, 28, "dinner"),
-        ("chicken stir-fry with vegetables", 520, 38, 42, 18, "dinner"),
-        ("pasta with marinara and ground turkey", 600, 32, 68, 18, "dinner"),
-        ("shrimp tacos with slaw", 480, 28, 42, 20, "dinner"),
-        ("baked chicken thighs with roasted vegetables", 560, 42, 30, 24, "dinner"),
-        ("burger and fries (dining out)", 920, 38, 72, 48, "dinner"),
-        ("pizza night (2 slices)", 680, 24, 72, 30, "dinner"),
+        ("8oz salmon with brown rice and broccoli", 680, 48, 52, 22, "dinner"),
+        ("8oz grilled steak with sweet potato and asparagus", 720, 52, 44, 30, "dinner"),
+        ("chicken stir-fry with vegetables and rice", 640, 44, 56, 20, "dinner"),
+        ("pasta with marinara and ground turkey", 700, 40, 74, 22, "dinner"),
+        ("shrimp tacos with slaw and guacamole", 620, 36, 48, 26, "dinner"),
+        ("baked chicken thighs with roasted vegetables", 660, 50, 34, 28, "dinner"),
+        ("burger and fries (dining out)", 980, 42, 78, 52, "dinner"),
+        ("pizza night (3 slices)", 840, 32, 84, 36, "dinner"),
     ]
     snacks = [
-        ("protein bar", 220, 20, 24, 8, "snack"),
-        ("apple with almond butter", 250, 6, 28, 14, "snack"),
-        ("trail mix handful", 200, 6, 18, 14, "snack"),
-        ("string cheese and crackers", 180, 10, 16, 8, "snack"),
-        ("protein shake", 160, 25, 8, 3, "snack"),
+        ("protein bar", 240, 22, 26, 8, "snack"),
+        ("apple with almond butter", 280, 8, 30, 16, "snack"),
+        ("trail mix and jerky", 320, 18, 22, 18, "snack"),
+        ("cottage cheese with fruit", 220, 24, 18, 5, "snack"),
+        ("protein shake", 200, 30, 10, 4, "snack"),
     ]
     exercises = [
         ("running", 30, 300),
@@ -833,8 +853,8 @@ def _seed_demo_data(user_id: str):
         day_of_week = day.weekday()
         is_weekend = day_of_week >= 5
 
-        # Skip breakfast sometimes (pattern for agent to detect)
-        if random.random() > 0.35:
+        # Skip breakfast sometimes (pattern for agent to detect — ~25% skip rate)
+        if random.random() > 0.25:
             b = random.choice(breakfasts)
             _store.put(ns_meals, f"breakfast_{date_str}", {
                 "text": f"Ate {b[0]} for breakfast: {b[1]} cal, {b[2]}g protein, {b[3]}g carbs, {b[4]}g fat",
@@ -864,8 +884,8 @@ def _seed_demo_data(user_id: str):
             "date": date_str, "timestamp": f"{date_str}T19:00:00",
         })
 
-        # Snack (sometimes)
-        if random.random() > 0.4:
+        # Snack (most days — protein targets need it)
+        if random.random() > 0.2:
             s = random.choice(snacks)
             _store.put(ns_meals, f"snack_{date_str}", {
                 "text": f"Ate {s[0]} for snack: {s[1]} cal, {s[2]}g protein, {s[3]}g carbs, {s[4]}g fat",
