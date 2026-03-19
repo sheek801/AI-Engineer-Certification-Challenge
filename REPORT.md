@@ -43,9 +43,9 @@ These 20 representative queries exercise every tool and data tier in the applica
 
 ### Solution Description
 
-MacroMind is a conversational AI assistant built on a ReAct (Reasoning + Acting) agent pattern using LangGraph's StateGraph. The user interacts through a Chainlit chat interface with two modes: a **Chat** mode for conversational AI interaction and a **Dashboard** mode with interactive Plotly charts showing calorie progress, macro breakdowns, and weekly trends. When a message arrives, the agent decides which of its seven tools to call based on the user's intent: searching the nutrition knowledge base, searching the web, logging a meal, managing a user profile, calculating a daily summary, analyzing nutrition progress, or looking up USDA food data.
+MacroMind is a conversational AI assistant built on a ReAct (Reasoning + Acting) agent pattern using LangGraph's StateGraph. The user interacts through a Chainlit chat interface with three modes: a **Chat** mode for conversational AI interaction, a **Dashboard** mode with five interactive Plotly charts (calorie gauge, macro breakdown, weekly calorie trend, protein trend, and meal frequency), and an **Insights** mode that generates an AI-powered nutrition analysis report. When a message arrives, the agent decides which of its eight tools to call based on the user's intent: searching the nutrition knowledge base, searching the web, logging a meal, managing a user profile, logging exercise, calculating a daily summary, analyzing nutrition progress, or looking up USDA food data.
 
-The experience feels like texting a knowledgeable nutritionist. The user types a question in natural language, and the agent reasons about which tool to use, executes it, interprets the results, and responds in a conversational tone. Behind the scenes, the agent maintains short-term memory (conversation history within a session) and long-term memory (user profile and meal logs that persist across topics). The system prompt guides the agent to always cite sources, include macro details with recipes, and avoid making up nutritional data.
+The experience feels like texting a knowledgeable nutritionist. The user types a question in natural language, and the agent reasons about which tool to use, executes it, interprets the results, and responds in a conversational tone. New users are greeted with a full-screen onboarding overlay that captures their profile (weight, height, age, sex, activity level), coaching tone preference (Supportive, Balanced, or Tough Love), and optional weight loss goals (target weight and target date). After onboarding, the agent generates a personalized welcome with a calorie deficit plan based on their goals. Behind the scenes, the agent maintains short-term memory (conversation history within a session) and long-term memory (user profile, meal logs, exercise sessions, and streaks that persist across sessions). The system prompt adapts its coaching personality based on the user's chosen tone, includes nutritional sanity checking (lie detection), week recovery strategies, and urban lifestyle awareness for dining out and travel.
 
 ### Infrastructure Diagram
 
@@ -53,20 +53,28 @@ The experience feels like texting a knowledgeable nutritionist. The user types a
 ┌─────────────────────────────────────────────────────────────────────┐
 │  USER LAYER                                                         │
 │                                                                     │
-│  Browser  ───►  Chainlit UI (localhost:8000)                        │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-                                 ▼
+│  Browser  ───►  Chainlit UI (localhost:8000 / Railway)              │
+│  ├── Chat Mode: Conversational agent interaction                    │
+│  ├── Dashboard Mode: 5 interactive Plotly charts                    │
+│  └── Insights Mode: AI-generated nutrition analysis report          │
+│                                                                     │
+│  Onboarding Overlay (JS): profile + goals + coaching tone           │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  AGENT ORCHESTRATION                                                │
 │                                                                     │
 │  LangGraph StateGraph (ReAct Loop)                                  │
-│  ├── LLM: GPT-4o-mini (ChatOpenAI)                                 │
-│  └── ToolNode (7 tools)                                             │
+│  ├── LLM: GPT-4o (ChatOpenAI)                                      │
+│  ├── System Prompt: dynamic tone (Supportive / Balanced / Tough)    │
+│  │   + Rules 1-17 (lie detection, week recovery, travel, exercise)  │
+│  └── ToolNode (8 tools)                                             │
 │       ├── search_nutrition_knowledge ──────► Retrieval Layer         │
 │       ├── search_web ──────────────────────► Tavily API             │
 │       ├── log_consumption ─────────────────► PersistentStore        │
 │       ├── manage_user_profile ─────────────► PersistentStore        │
+│       ├── log_exercise ────────────────────► PersistentStore        │
 │       ├── calculate_daily_summary ─────────► PersistentStore        │
 │       ├── analyze_progress ────────────────► PersistentStore        │
 │       └── search_usda_foods ───────────────► USDA FoodData API     │
@@ -86,7 +94,11 @@ The experience feels like texting a knowledgeable nutritionist. The user types a
 │  Qdrant Vector Store        │  │  PersistentStore (SQLite)          │
 │    (in-memory, 1536 dims)   │  │    Long-term user data             │
 │       │                     │  │    sqlite-vec + FTS5 hybrid search │
-│  text-embedding-3-small     │  │    Profiles, meals, streaks        │
+│  text-embedding-3-small     │  │    ├── Profiles (weight, TDEE,     │
+│                              │  │    │   tone, target weight/date)   │
+│                              │  │    ├── Meals (consumption logs)    │
+│                              │  │    ├── Exercise (activity logs)    │
+│                              │  │    └── Streaks (consistency)       │
 └──────────┬──────────────────┘  └────────────────────────────────────┘
            │
            ▼
@@ -118,23 +130,23 @@ Evaluation:
 
 ### Tooling Justifications
 
-- **GPT-4o-mini**: Cost-effective model with strong instruction-following and tool-calling capabilities, well suited for a prototype where API costs need to stay low.
+- **GPT-4o**: Upgraded from GPT-4o-mini for stronger reasoning, more reliable tool-calling, and higher quality nutritional analysis. The improved instruction-following is critical for tone-aware coaching, lie detection, and generating personalized weight loss plans from user profile data.
 - **LangGraph StateGraph**: Provides explicit control over the ReAct loop (assistant node, tool node, routing), unlike black-box agent wrappers, making the agent's decision process transparent and debuggable.
-- **7 Agent Tools**: Each tool handles a distinct user intent (RAG search, web search, meal logging, profile management, daily summary, progress analysis, USDA food lookup), giving the agent clear boundaries for when to use each.
+- **8 Agent Tools**: Each tool handles a distinct user intent (RAG search, web search, meal logging, exercise tracking, profile management, daily summary, progress analysis, USDA food lookup), giving the agent clear boundaries for when to use each.
 - **text-embedding-3-small (1536 dims)**: OpenAI's latest small embedding model balances quality and cost for semantic retrieval.
 - **Qdrant (in-memory)**: Fast vector similarity search with zero infrastructure overhead; in-memory mode is ideal for prototyping and local deployment.
 - **LangSmith**: Provides trace-level observability into every LLM call, tool invocation, and retrieval step, essential for debugging agent behavior in production.
 - **RAGAS**: The standard evaluation framework for RAG pipelines, providing automated metrics (faithfulness, context precision, context recall) that quantify retrieval and generation quality.
-- **Chainlit**: Native LangGraph integration with a polished chat UI, supports Chat Profiles, Plotly chart rendering, and session management out of the box.
+- **Chainlit**: Native LangGraph integration with a polished chat UI, supports Chat Profiles (Chat, Dashboard, Insights), Plotly chart rendering, custom JS/CSS injection, and session management out of the box. Custom JavaScript handles the onboarding overlay, dashboard/insights mode detection, and Enter-to-send keyboard behavior.
 - **Railway Deployment**: Dockerized production deployment with persistent volume for SQLite storage, accessible at a public URL.
-- **PersistentStore (SQLite + sqlite-vec + FTS5)**: Custom `BaseStore` subclass that provides persistent, hybrid-search user data storage. Replaces InMemoryStore so user profiles, meal logs, and streaks survive server restarts.
-- **Plotly**: Interactive charts for the Dashboard view — calorie gauge, macro breakdown pie chart, and weekly calorie trend bar chart.
+- **PersistentStore (SQLite + sqlite-vec + FTS5)**: Custom `BaseStore` subclass that provides persistent, hybrid-search user data storage. Replaces InMemoryStore so user profiles, meal logs, exercise sessions, and streaks survive server restarts. Stores four namespaces per user: profile, consumption, exercise, and streaks.
+- **Plotly**: Five interactive charts for the Dashboard view — calorie gauge (with target intake reference for weight loss users), macro breakdown pie chart, weekly calorie trend with exercise burn overlay, daily protein trend with target line, and meal frequency by type.
 
 ### RAG and Agent Components
 
 The **RAG component** is the retrieval pipeline: documents from three data tiers (nutrition science PDFs/TXTs, Food.com recipes, fast food CSV) are loaded, chunked (for PDFs/TXTs) or converted to narrative text (for CSVs), embedded with text-embedding-3-small, and stored in a single Qdrant collection. At query time, the EnsembleRetriever combines BM25 keyword matching with dense vector search using reciprocal rank fusion to surface the most relevant documents.
 
-The **Agent component** is the LangGraph StateGraph that orchestrates the ReAct loop. The assistant node calls GPT-4o-mini with the system prompt and conversation history. If the model decides to use a tool, the ToolNode executes it and feeds the result back to the assistant for another reasoning step. This loop continues until the model produces a final response without tool calls. The agent also manages short-term memory (MemorySaver for conversation continuity) and long-term memory (PersistentStore backed by SQLite with sqlite-vec and FTS5 for user profiles, meal logs, and streak tracking that persist across sessions and server restarts). The `analyze_progress` tool closes the memory feedback loop by reading back all stored data (profile, meals, weight history), computing per-day totals and averages, and returning structured context that the LLM then reasons over to identify patterns and generate actionable suggestions.
+The **Agent component** is the LangGraph StateGraph that orchestrates the ReAct loop. The assistant node calls GPT-4o with a dynamic system prompt that adapts based on the user's chosen coaching tone (Supportive, Balanced, or Tough Love) and includes 17 behavioral rules covering nutritional sanity checking, week recovery strategies, urban lifestyle awareness, and exercise tracking guidance. If the model decides to use a tool, the ToolNode executes it and feeds the result back to the assistant for another reasoning step. This loop continues until the model produces a final response without tool calls. The agent also manages short-term memory (MemorySaver for conversation continuity) and long-term memory (PersistentStore backed by SQLite with sqlite-vec and FTS5 for user profiles, meal logs, exercise sessions, and streak tracking that persist across sessions and server restarts). The `analyze_progress` tool closes the memory feedback loop by reading back all stored data (profile, meals, exercise, weight history), computing per-day totals including net calories (consumed minus exercise burned), and returning structured context that the LLM then reasons over to identify patterns and generate actionable suggestions.
 
 ## Task 3: Data and External APIs
 
@@ -169,10 +181,10 @@ The application is deployed live at `https://strong-caring-production-50e7.up.ra
 1. All 1,287 documents are loaded and embedded into the Qdrant in-memory vector store
 2. The EnsembleRetriever (BM25 + Dense) is initialized
 3. Both memory systems (MemorySaver + PersistentStore with SQLite) are created
-4. The 7 agent tools are built and bound to the LLM
+4. The 8 agent tools are built and bound to the LLM
 5. The LangGraph StateGraph is compiled and ready for invocation
 
-The app offers two modes via Chainlit Chat Profiles: **Chat** mode for conversational AI interaction, and **Dashboard** mode with interactive Plotly charts (calorie gauge, macro breakdown pie chart, and weekly calorie trend). User data persists across sessions via SQLite with a Railway persistent volume. The agent was tested with questions spanning all seven tools: nutrition science queries, recipe lookups, fast food macro checks, USDA food lookups, meal logging, profile setup, TDEE calculation, daily summaries, and progress analysis.
+The app offers three modes via Chainlit Chat Profiles: **Chat** mode for conversational AI interaction, **Dashboard** mode with five interactive Plotly charts (calorie gauge with target intake line, macro breakdown pie chart, weekly calorie trend with exercise burn overlay, daily protein trend, and meal frequency by type), and **Insights** mode that generates an AI-powered nutrition analysis report covering eating patterns, macro balance, strengths, and improvement areas. New users are greeted with a full-screen onboarding overlay that captures their profile, coaching tone preference, and optional weight loss goals. User data persists across sessions via SQLite with a Railway persistent volume. The agent supports three coaching tones (Supportive, Balanced, Tough Love), exercise tracking with automatic daily budget adjustment, nutritional sanity checking, and travel/dining-out awareness. The agent was tested with questions spanning all eight tools: nutrition science queries, recipe lookups, fast food macro checks, USDA food lookups, meal logging, exercise logging, profile setup, TDEE calculation, daily summaries, and progress analysis.
 
 ## Task 5: Baseline Evaluation with RAGAS
 
@@ -241,9 +253,10 @@ The small decrease in context precision (85% to 80%) is an acceptable trade-off.
 For further improvement, potential next steps include:
 
 - **Google OAuth**: Multi-user authentication for broader access beyond demo password
-- **Photo-based meal logging**: Snap a picture of your plate, auto-detect food and log macros
-- **Goal-aware coaching**: "You'll hit 165 lbs by June at this rate" — proactive suggestions based on trends
+- **Photo-based meal logging**: Snap a picture of your plate, auto-detect food and log macros using vision models
 - **Weekly email reports**: Automated trend analysis and actionable insights delivered to your inbox
 - **Cohere reranking**: Recover context precision without sacrificing the recall gains from the ensemble retriever
 - **Expanded recipe dataset**: Scale beyond 75 recipes for broader meal planning coverage
 - **Voice input via Whisper**: Speak your meals instead of typing, leveraging Chainlit's native audio support
+- **Mobile-First PWA**: Progressive web app for on-the-go nutrition tracking with push notifications
+- **Interactive infrastructure diagram**: React Flow visualization of the agent architecture for documentation and onboarding
