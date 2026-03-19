@@ -221,7 +221,7 @@ async def render_dashboard(user_id: str):
 
     all_dates = set(days_consumed.keys()) | set(days_burned.keys())
     if len(all_dates) > 1:
-        sorted_dates = sorted(all_dates)[-7:]
+        sorted_dates = sorted(all_dates)
         consumed_vals = [round(days_consumed.get(d, 0)) for d in sorted_dates]
         burned_vals = [round(days_burned.get(d, 0)) for d in sorted_dates]
         net_vals = [c - b for c, b in zip(consumed_vals, burned_vals)]
@@ -264,7 +264,7 @@ async def render_dashboard(user_id: str):
                 annotation_font=dict(color=_CORAL, size=12, family=_FONT),
             )
         trend_fig.update_layout(
-            title_text="Daily Calories (Last 7 Days)",
+            title_text="Daily Calories",
             title_x=0.5,
             title_font=dict(color="white", size=16, family=_FONT),
             yaxis_title="Calories",
@@ -283,9 +283,11 @@ async def render_dashboard(user_id: str):
             font=dict(family=_FONT, color="white"),
             bargap=0.3,
         )
-        elements.append(cl.Plotly(name="weekly_trend", figure=trend_fig, display="inline"))
+        trend_element = cl.Plotly(name="weekly_trend", figure=trend_fig, display="inline")
+    else:
+        trend_element = None
 
-    # 4. Protein trend (line chart — last 7 days)
+    # 4. Protein trend (line chart — full timeframe)
     protein_by_day = defaultdict(float)
     for m in all_meals:
         d = m.value.get("date", "")
@@ -293,7 +295,7 @@ async def render_dashboard(user_id: str):
             protein_by_day[d] += m.value.get("protein_g", 0)
 
     if len(protein_by_day) > 1:
-        sorted_pdays = sorted(protein_by_day.items())[-7:]
+        sorted_pdays = sorted(protein_by_day.items())
         p_dates = [d[0] for d in sorted_pdays]
         p_vals = [round(d[1]) for d in sorted_pdays]
 
@@ -316,7 +318,7 @@ async def render_dashboard(user_id: str):
                 annotation_font=dict(color=_CORAL, size=11, family=_FONT),
             )
         pro_fig.update_layout(
-            title_text="Daily Protein (Last 7 Days)",
+            title_text="Daily Protein",
             title_x=0.5,
             title_font=dict(color="white", size=16, family=_FONT),
             yaxis_title="Protein (g)",
@@ -332,9 +334,11 @@ async def render_dashboard(user_id: str):
             font=dict(family=_FONT, color="white"),
             showlegend=False,
         )
-        elements.append(cl.Plotly(name="protein_trend", figure=pro_fig, display="inline"))
+        protein_element = cl.Plotly(name="protein_trend", figure=pro_fig, display="inline")
+    else:
+        protein_element = None
 
-    # 5. Meal frequency by type (horizontal bar — this week)
+    # 5. Meal frequency by type (horizontal bar — all time)
     meal_type_counts = defaultdict(int)
     for m in all_meals:
         mt = m.value.get("meal_type", "snack")
@@ -368,7 +372,17 @@ async def render_dashboard(user_id: str):
             font=dict(family=_FONT, color="white"),
             bargap=0.35,
         )
-        elements.append(cl.Plotly(name="meal_frequency", figure=freq_fig, display="inline"))
+        freq_element = cl.Plotly(name="meal_frequency", figure=freq_fig, display="inline")
+    else:
+        freq_element = None
+
+    # ── Append charts in display order: Gauge, Macro, Frequency, Calories, Protein ──
+    if freq_element:
+        elements.append(freq_element)
+    if trend_element:
+        elements.append(trend_element)
+    if protein_element:
+        elements.append(protein_element)
 
     # ── Build summary text ────────────────────────────────────────
     streak_text = f"**Streak:** {streak_count} day(s) (Best: {streak_best})" if streak_count > 0 else "**Streak:** Start logging to begin!"
@@ -808,12 +822,12 @@ def _seed_demo_data(user_id: str):
         _store.put(ns_profile, "target_date", {"value": "2026-05-25"})
 
     # ── Deterministic daily meal plans ────────────────────────────
-    # Tells a story: user is TRYING to hit goals (~2220 cal, ~139g protein)
-    # Week 1 is rougher (skipped breakfasts, weekend blowout, low protein days)
-    # Week 2 improves (more consistent, better protein, fewer slips)
-    # This gives the Insights tab rich patterns to analyze.
+    # Committed user actively cutting to 160 lbs. Hits target intake
+    # (~2220 cal) and protein (~139g) consistently. Exercises 4-5x/week.
+    # Every day has breakfast + lunch + dinner + snack (proper logging).
+    # One weekend dinner out (burger) but stays in range.
     #
-    # Each entry: (breakfast, lunch, dinner, snack_or_None, exercise_or_None)
+    # Each entry: (breakfast, lunch, dinner, snack, exercise_or_None)
     # Meal tuples: (name, cal, protein, carbs, fat, meal_type)
     # Exercise tuples: (name, duration, cal_burned) or None
 
@@ -838,7 +852,6 @@ def _seed_demo_data(user_id: str):
     D_TACOS    = ("shrimp tacos with slaw and guacamole", 690, 40, 50, 28, "dinner")
     D_CHICKEN  = ("baked chicken thighs with roasted vegetables", 720, 52, 36, 30, "dinner")
     D_BURGER   = ("burger and fries (dining out)", 800, 46, 64, 40, "dinner")
-    D_PIZZA    = ("pizza night (3 slices)", 770, 36, 80, 34, "dinner")
 
     S_BAR      = ("protein bar", 270, 24, 28, 10, "snack")
     S_APPLE    = ("apple with almond butter", 290, 10, 32, 18, "snack")
@@ -852,42 +865,40 @@ def _seed_demo_data(user_id: str):
     EX_LIFT    = ("weight training", 50, 280)
     EX_YOGA    = ("yoga", 30, 120)
 
-    # day_plan: (breakfast_or_None, lunch, dinner, snack_or_None, exercise_or_None)
+    # day_plan: (breakfast, lunch, dinner, snack, exercise_or_None)
     # Day 14 = oldest, Day 0 = today
+    # All days have 4 meals. Exercise 4-5x/week. Committed cut to 160 lbs.
     daily_plans = [
-        # ── WEEK 1: Getting started, some inconsistency ──────────
-        # Day 14 (Thu) — first day logging, decent but skipped snack
-        (B_OATMEAL,  L_CHKSAND, D_STIRFRY,  None,      EX_RUN),    # 1930 cal, 130g pro
-        # Day 13 (Fri) — good day, all meals logged
-        (B_AVOTOAST, L_CAESAR,  D_SALMON,    S_BAR,     None),      # 2190 cal, 162g pro
-        # Day 12 (Sat) — weekend splurge, pizza + no exercise
-        (B_YOGURT,   L_POKE,    D_PIZZA,     S_APPLE,   None),      # 2260 cal, 122g pro ← low protein
-        # Day 11 (Sun) — skipped breakfast, late brunch situation
-        (None,       L_BOWL,    D_STEAK,     S_TRAIL,   None),      # 1790 cal, 122g pro ← under cal
-        # Day 10 (Mon) — back on track after weekend
-        (B_BURRITO,  L_WRAP,    D_CHICKEN,   S_SHAKE,   EX_LIFT),   # 2230 cal, 168g pro
-        # Day 9 (Tue) — solid day
-        (B_SMOOTHIE, L_TUNA,    D_PASTA,     S_COTTAGE, None),      # 2170 cal, 150g pro
-        # Day 8 (Wed) — skipped breakfast again, rushed morning
-        (None,       L_BOWL,    D_SALMON,    S_BAR,     EX_RUN),    # 1710 cal, 142g pro ← under cal
-
-        # ── WEEK 2: Building consistency, hitting targets ────────
-        # Day 7 (Thu) — committed to breakfast, strong day
-        (B_OMELET,   L_CHKSAND, D_STEAK,     S_SHAKE,   EX_CYCLE),  # 2310 cal, 180g pro
-        # Day 6 (Fri) — good day, eating out for lunch
-        (B_BURRITO,  L_CAESAR,  D_TACOS,     S_COTTAGE, None),      # 2180 cal, 168g pro
-        # Day 5 (Sat) — weekend but kept it reasonable, burger but no binge
-        (B_AVOTOAST, L_POKE,    D_BURGER,    S_BAR,     None),      # 2310 cal, 156g pro
-        # Day 4 (Sun) — lighter day but still logged everything
-        (B_YOGURT,   L_TUNA,    D_CHICKEN,   S_APPLE,   None),      # 2190 cal, 134g pro
-        # Day 3 (Mon) — strong start to the week
-        (B_OATMEAL,  L_WRAP,    D_SALMON,    S_SHAKE,   EX_LIFT),   # 2230 cal, 164g pro
-        # Day 2 (Tue) — great protein day
-        (B_OMELET,   L_BOWL,    D_STEAK,     S_COTTAGE, EX_RUN),    # 2280 cal, 170g pro
-        # Day 1 (Wed) — solid, consistent
-        (B_SMOOTHIE, L_CHKSAND, D_PASTA,     S_TRAIL,   None),      # 2270 cal, 148g pro
-        # Day 0 (Today/Thu) — on track so far
-        (B_BURRITO,  L_CAESAR,  D_STIRFRY,   S_BAR,     EX_CYCLE),  # 2240 cal, 172g pro
+        # Day 14 (Thu)
+        (B_OATMEAL,  L_CHKSAND, D_STIRFRY,  S_SHAKE,   EX_RUN),    # 2200, 162
+        # Day 13 (Fri)
+        (B_AVOTOAST, L_CAESAR,  D_SALMON,    S_BAR,     None),      # 2190, 162
+        # Day 12 (Sat)
+        (B_YOGURT,   L_POKE,    D_STEAK,     S_COTTAGE, None),      # 2220, 158
+        # Day 11 (Sun)
+        (B_BURRITO,  L_WRAP,    D_CHICKEN,   S_APPLE,   None),      # 2270, 130
+        # Day 10 (Mon)
+        (B_OMELET,   L_BOWL,    D_TACOS,     S_SHAKE,   EX_LIFT),   # 2200, 166
+        # Day 9 (Tue)
+        (B_SMOOTHIE, L_TUNA,    D_PASTA,     S_COTTAGE, EX_RUN),    # 2170, 152
+        # Day 8 (Wed)
+        (B_BURRITO,  L_CHKSAND, D_SALMON,    S_BAR,     EX_CYCLE),  # 2260, 172
+        # Day 7 (Thu)
+        (B_OATMEAL,  L_CAESAR,  D_STEAK,     S_TRAIL,   EX_LIFT),   # 2260, 162
+        # Day 6 (Fri)
+        (B_AVOTOAST, L_POKE,    D_STIRFRY,   S_SHAKE,   None),      # 2210, 168
+        # Day 5 (Sat) — weekend dinner out, still in range
+        (B_YOGURT,   L_WRAP,    D_BURGER,    S_COTTAGE, None),       # 2260, 154
+        # Day 4 (Sun)
+        (B_OMELET,   L_TUNA,    D_CHICKEN,   S_APPLE,   EX_WALK),   # 2240, 142
+        # Day 3 (Mon)
+        (B_SMOOTHIE, L_BOWL,    D_SALMON,    S_BAR,     EX_LIFT),    # 2230, 170
+        # Day 2 (Tue)
+        (B_BURRITO,  L_CAESAR,  D_TACOS,     S_TRAIL,   EX_RUN),    # 2230, 162
+        # Day 1 (Wed)
+        (B_OATMEAL,  L_CHKSAND, D_PASTA,     S_COTTAGE, EX_CYCLE),  # 2230, 154
+        # Day 0 (Today/Thu)
+        (B_AVOTOAST, L_WRAP,    D_STEAK,     S_SHAKE,   EX_RUN),    # 2250, 168
     ]
 
     for day_offset in range(14, -1, -1):  # 14 down to 0 (today)
