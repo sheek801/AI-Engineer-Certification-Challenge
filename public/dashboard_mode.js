@@ -420,4 +420,21 @@
 
   // Steady-state poll (every 1.5s) to catch any edge cases
   setInterval(applyState, 1500);
+
+  /* ── Enter = send, Shift+Enter = newline ──────────────────────── */
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return;
+    var target = e.target;
+    // Only act on the chat textarea — skip if inside the onboarding form
+    if (!target || target.tagName !== "TEXTAREA") return;
+    if (target.closest && target.closest("#mm-onboarding")) return;
+    // Shift+Enter = allow default newline
+    if (e.shiftKey) return;
+    // Enter without Shift = click send button
+    e.preventDefault();
+    var sendBtn =
+      document.querySelector('button[data-testid="send-button"]') ||
+      document.querySelector('button[aria-label*="send" i]');
+    if (sendBtn) sendBtn.click();
+  });
 })();
