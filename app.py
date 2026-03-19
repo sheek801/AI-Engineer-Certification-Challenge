@@ -250,7 +250,7 @@ async def render_dashboard(user_id: str):
             title_font=dict(color="white", size=16, family=_FONT),
             yaxis_title="Calories",
             yaxis=dict(
-                titlefont=dict(color=_GRAY, size=12),
+                title_font=dict(color=_GRAY, size=12),
                 tickfont=dict(color=_GRAY, size=10),
                 gridcolor="#3A3A3C", gridwidth=0.5,
                 zeroline=False,
@@ -302,7 +302,7 @@ async def render_dashboard(user_id: str):
             title_font=dict(color="white", size=16, family=_FONT),
             yaxis_title="Protein (g)",
             yaxis=dict(
-                titlefont=dict(color=_GRAY, size=12),
+                title_font=dict(color=_GRAY, size=12),
                 tickfont=dict(color=_GRAY, size=10),
                 gridcolor="#3A3A3C", gridwidth=0.5,
                 zeroline=False,
