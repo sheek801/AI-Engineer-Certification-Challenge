@@ -191,7 +191,10 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
             action: "get" to read profile, "set" to update a field,
                     "tdee" to calculate Total Daily Energy Expenditure.
             field: Which field to set (weight_kg, height_cm, age, sex,
-                   activity_level). Ignored for "get" and "tdee".
+                   activity_level, target_weight_kg, target_date, tone).
+                   Ignored for "get" and "tdee". For target_weight_kg use
+                   kg (convert from lbs if needed: lbs / 2.205). For
+                   target_date use YYYY-MM-DD format.
             value: The value to set. Ignored for "get" and "tdee".
         """
         namespace = (user_id, "profile")

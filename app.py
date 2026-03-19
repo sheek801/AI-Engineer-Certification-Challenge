@@ -498,6 +498,47 @@ async def handle_message(message: cl.Message):
         await cl.Message(content="Demo data seeded! Switch to **Dashboard** or **Insights** to see it.").send()
         return
 
+    # ── Profile view/update command ─────────────────────────────
+    if message.content.strip().lower() == "/profile":
+        if _store is None:
+            await cl.Message(content="Store not ready yet.").send()
+            return
+        items = list(_store.search((user_id, "profile")))
+        prof = {item.key: item.value.get("value", "") for item in items}
+        if not prof:
+            await cl.Message(content="No profile found. Complete onboarding first.").send()
+            return
+        units = prof.get("units", "metric")
+        is_imp = units == "imperial"
+        lines = []
+        if "weight_kg" in prof:
+            w = float(prof["weight_kg"])
+            lines.append(f"**Weight:** {round(w * 2.20462)} lbs" if is_imp else f"**Weight:** {w} kg")
+        if "height_cm" in prof:
+            h = float(prof["height_cm"])
+            if is_imp:
+                ti = round(h / 2.54)
+                ft, inch = divmod(ti, 12)
+                lines.append(f"**Height:** {ft}'{inch}\"")
+            else:
+                lines.append(f"**Height:** {h} cm")
+        lines.append(f"**Age:** {prof.get('age', '?')}")
+        lines.append(f"**Sex:** {prof.get('sex', '?').capitalize()}")
+        lines.append(f"**Activity:** {prof.get('activity_level', '?')}")
+        lines.append(f"**TDEE:** {prof.get('tdee', '?')} cal/day")
+        lines.append(f"**Tone:** {prof.get('tone', 'balanced')}")
+        tw = prof.get("target_weight_kg", "")
+        td = prof.get("target_date", "")
+        if tw and tw.strip():
+            tw_str = f"{round(float(tw) * 2.20462)} lbs" if is_imp else f"{tw} kg"
+            lines.append(f"**Target Weight:** {tw_str}")
+        if td and td.strip():
+            lines.append(f"**Target Date:** {td}")
+        profile_md = "## Your Profile\n\n" + "\n".join(lines)
+        profile_md += "\n\n---\n*To update, just tell me — e.g. \"change my target weight to 155 lbs\" or \"set my target date to July 1\"*"
+        await cl.Message(content=profile_md).send()
+        return
+
     # ── Onboarding form submission (from JS overlay) ──────────────
     if message.content.startswith("__ONBOARDING__:"):
         try:
@@ -729,6 +770,21 @@ def _seed_demo_data(user_id: str):
     ns_meals = (user_id, "consumption")
     ns_exercise = (user_id, "exercise")
 
+    # Seed profile if user doesn't have one (demo build: 170 lbs, 5'10", 28M moderate)
+    ns_profile = (user_id, "profile")
+    profile_items = list(_store.search(ns_profile))
+    if not profile_items:
+        _store.put(ns_profile, "weight_kg", {"value": "77.1"})
+        _store.put(ns_profile, "height_cm", {"value": "177.8"})
+        _store.put(ns_profile, "age", {"value": "28"})
+        _store.put(ns_profile, "sex", {"value": "male"})
+        _store.put(ns_profile, "activity_level", {"value": "moderate"})
+        _store.put(ns_profile, "tdee", {"value": "2739"})
+        _store.put(ns_profile, "units", {"value": "imperial"})
+        _store.put(ns_profile, "tone", {"value": "balanced"})
+        _store.put(ns_profile, "target_weight_kg", {"value": "72.6"})
+        _store.put(ns_profile, "target_date", {"value": "2026-06-01"})
+
     # Realistic meal templates: (food_name, calories, protein, carbs, fat, meal_type)
     breakfasts = [
         ("scrambled eggs with toast", 380, 22, 28, 18, "breakfast"),
@@ -771,7 +827,7 @@ def _seed_demo_data(user_id: str):
         ("yoga", 30, 120),
     ]
 
-    for day_offset in range(14, 0, -1):
+    for day_offset in range(14, -1, -1):  # includes today (day_offset=0)
         day = today - timedelta(days=day_offset)
         date_str = day.strftime("%Y-%m-%d")
         day_of_week = day.weekday()
