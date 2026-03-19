@@ -14,9 +14,11 @@
   var onboardingCompleted = false;
   var bootGuardActive = true;
 
-  /* ── Dashboard detection ────────────────────────────────────────── */
+  /* ── Dashboard / Insights detection (both hide the composer) ───── */
   function dashboardInDom() {
-    return document.body.innerHTML.indexOf("MacroMind Dashboard") !== -1;
+    var html = document.body.innerHTML;
+    return html.indexOf("MacroMind Dashboard") !== -1 ||
+           html.indexOf("MacroMind Insights") !== -1;
   }
 
   /* ── Onboarding detection ───────────────────────────────────────── */
