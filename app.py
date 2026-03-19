@@ -789,118 +789,153 @@ def _seed_demo_data(user_id: str):
     ns_meals = (user_id, "consumption")
     ns_exercise = (user_id, "exercise")
 
-    # Seed profile if user doesn't have one (demo build: 170 lbs, 5'10", 28M moderate)
+    # Seed profile if user doesn't have one (demo build: 170 lbs, 70in, 24M moderate)
+    # TDEE = BMR(1767) × 1.55 = 2739 cal/day
+    # Target intake: 2739 - 517 deficit = ~2220 cal/day
+    # Protein target: 77.1kg × 1.8 = ~139g/day
     ns_profile = (user_id, "profile")
     profile_items = list(_store.search(ns_profile))
     if not profile_items:
         _store.put(ns_profile, "weight_kg", {"value": "77.1"})
         _store.put(ns_profile, "height_cm", {"value": "177.8"})
-        _store.put(ns_profile, "age", {"value": "28"})
+        _store.put(ns_profile, "age", {"value": "24"})
         _store.put(ns_profile, "sex", {"value": "male"})
         _store.put(ns_profile, "activity_level", {"value": "moderate"})
         _store.put(ns_profile, "tdee", {"value": "2739"})
         _store.put(ns_profile, "units", {"value": "imperial"})
         _store.put(ns_profile, "tone", {"value": "balanced"})
         _store.put(ns_profile, "target_weight_kg", {"value": "72.6"})
-        _store.put(ns_profile, "target_date", {"value": "2026-06-01"})
+        _store.put(ns_profile, "target_date", {"value": "2026-05-25"})
 
-    # Realistic meal templates for a 170 lb male targeting ~2200-2500 cal/day, ~130-150g protein
-    # (food_name, calories, protein, carbs, fat, meal_type)
-    breakfasts = [
-        ("4-egg omelet with cheese and veggies", 520, 38, 8, 36, "breakfast"),
-        ("Greek yogurt parfait with granola and berries", 450, 30, 52, 14, "breakfast"),
-        ("oatmeal with protein powder and banana", 480, 32, 62, 12, "breakfast"),
-        ("avocado toast with 2 eggs and turkey bacon", 540, 34, 36, 28, "breakfast"),
-        ("protein smoothie with banana and peanut butter", 460, 36, 42, 16, "breakfast"),
-        ("breakfast burrito with eggs and sausage", 580, 32, 44, 28, "breakfast"),
-    ]
-    lunches = [
-        ("grilled chicken Caesar salad with croutons", 620, 48, 24, 32, "lunch"),
-        ("turkey and avocado wrap with side salad", 640, 42, 48, 26, "lunch"),
-        ("chicken burrito bowl with rice and beans", 720, 44, 72, 22, "lunch"),
-        ("tuna melt sandwich with soup", 580, 40, 42, 24, "lunch"),
-        ("poke bowl with brown rice and edamame", 650, 38, 62, 22, "lunch"),
-        ("grilled chicken sandwich with sweet potato fries", 680, 42, 58, 26, "lunch"),
-    ]
-    dinners = [
-        ("8oz salmon with brown rice and broccoli", 680, 48, 52, 22, "dinner"),
-        ("8oz grilled steak with sweet potato and asparagus", 720, 52, 44, 30, "dinner"),
-        ("chicken stir-fry with vegetables and rice", 640, 44, 56, 20, "dinner"),
-        ("pasta with marinara and ground turkey", 700, 40, 74, 22, "dinner"),
-        ("shrimp tacos with slaw and guacamole", 620, 36, 48, 26, "dinner"),
-        ("baked chicken thighs with roasted vegetables", 660, 50, 34, 28, "dinner"),
-        ("burger and fries (dining out)", 980, 42, 78, 52, "dinner"),
-        ("pizza night (3 slices)", 840, 32, 84, 36, "dinner"),
-    ]
-    snacks = [
-        ("protein bar", 240, 22, 26, 8, "snack"),
-        ("apple with almond butter", 280, 8, 30, 16, "snack"),
-        ("trail mix and jerky", 320, 18, 22, 18, "snack"),
-        ("cottage cheese with fruit", 220, 24, 18, 5, "snack"),
-        ("protein shake", 200, 30, 10, 4, "snack"),
-    ]
-    exercises = [
-        ("running", 30, 300),
-        ("cycling", 45, 350),
-        ("walking", 40, 180),
-        ("weight training", 50, 280),
-        ("yoga", 30, 120),
+    # ── Deterministic daily meal plans ────────────────────────────
+    # Tells a story: user is TRYING to hit goals (~2220 cal, ~139g protein)
+    # Week 1 is rougher (skipped breakfasts, weekend blowout, low protein days)
+    # Week 2 improves (more consistent, better protein, fewer slips)
+    # This gives the Insights tab rich patterns to analyze.
+    #
+    # Each entry: (breakfast, lunch, dinner, snack_or_None, exercise_or_None)
+    # Meal tuples: (name, cal, protein, carbs, fat, meal_type)
+    # Exercise tuples: (name, duration, cal_burned) or None
+
+    B_OMELET   = ("4-egg omelet with cheese and veggies", 540, 38, 10, 38, "breakfast")
+    B_YOGURT   = ("Greek yogurt parfait with granola and berries", 520, 34, 56, 16, "breakfast")
+    B_OATMEAL  = ("oatmeal with protein powder and banana", 530, 36, 64, 14, "breakfast")
+    B_AVOTOAST = ("avocado toast with 2 eggs and turkey bacon", 560, 38, 38, 30, "breakfast")
+    B_SMOOTHIE = ("protein smoothie with banana and peanut butter", 520, 36, 44, 18, "breakfast")
+    B_BURRITO  = ("breakfast burrito with eggs and sausage", 570, 36, 46, 30, "breakfast")
+
+    L_CAESAR   = ("grilled chicken Caesar salad", 660, 48, 26, 34, "lunch")
+    L_WRAP     = ("turkey and avocado wrap with side salad", 680, 44, 50, 28, "lunch")
+    L_BOWL     = ("chicken burrito bowl with rice and beans", 720, 46, 70, 24, "lunch")
+    L_TUNA     = ("tuna melt sandwich with soup", 650, 44, 44, 26, "lunch")
+    L_POKE     = ("poke bowl with brown rice and edamame", 680, 42, 64, 24, "lunch")
+    L_CHKSAND  = ("grilled chicken sandwich with sweet potato fries", 700, 46, 60, 28, "lunch")
+
+    D_SALMON   = ("8oz salmon with brown rice and broccoli", 720, 52, 54, 24, "dinner")
+    D_STEAK    = ("8oz grilled steak with sweet potato and asparagus", 760, 54, 46, 32, "dinner")
+    D_STIRFRY  = ("chicken stir-fry with vegetables and rice", 700, 48, 58, 22, "dinner")
+    D_PASTA    = ("pasta with marinara and ground turkey", 740, 44, 76, 24, "dinner")
+    D_TACOS    = ("shrimp tacos with slaw and guacamole", 690, 40, 50, 28, "dinner")
+    D_CHICKEN  = ("baked chicken thighs with roasted vegetables", 720, 52, 36, 30, "dinner")
+    D_BURGER   = ("burger and fries (dining out)", 800, 46, 64, 40, "dinner")
+    D_PIZZA    = ("pizza night (3 slices)", 770, 36, 80, 34, "dinner")
+
+    S_BAR      = ("protein bar", 270, 24, 28, 10, "snack")
+    S_APPLE    = ("apple with almond butter", 290, 10, 32, 18, "snack")
+    S_TRAIL    = ("trail mix and jerky", 310, 22, 24, 18, "snack")
+    S_COTTAGE  = ("cottage cheese with fruit", 260, 28, 20, 6, "snack")
+    S_SHAKE    = ("protein shake", 250, 32, 12, 6, "snack")
+
+    EX_RUN     = ("running", 30, 300)
+    EX_CYCLE   = ("cycling", 45, 350)
+    EX_WALK    = ("walking", 40, 180)
+    EX_LIFT    = ("weight training", 50, 280)
+    EX_YOGA    = ("yoga", 30, 120)
+
+    # day_plan: (breakfast_or_None, lunch, dinner, snack_or_None, exercise_or_None)
+    # Day 14 = oldest, Day 0 = today
+    daily_plans = [
+        # ── WEEK 1: Getting started, some inconsistency ──────────
+        # Day 14 (Thu) — first day logging, decent but skipped snack
+        (B_OATMEAL,  L_CHKSAND, D_STIRFRY,  None,      EX_RUN),    # 1930 cal, 130g pro
+        # Day 13 (Fri) — good day, all meals logged
+        (B_AVOTOAST, L_CAESAR,  D_SALMON,    S_BAR,     None),      # 2190 cal, 162g pro
+        # Day 12 (Sat) — weekend splurge, pizza + no exercise
+        (B_YOGURT,   L_POKE,    D_PIZZA,     S_APPLE,   None),      # 2260 cal, 122g pro ← low protein
+        # Day 11 (Sun) — skipped breakfast, late brunch situation
+        (None,       L_BOWL,    D_STEAK,     S_TRAIL,   None),      # 1790 cal, 122g pro ← under cal
+        # Day 10 (Mon) — back on track after weekend
+        (B_BURRITO,  L_WRAP,    D_CHICKEN,   S_SHAKE,   EX_LIFT),   # 2230 cal, 168g pro
+        # Day 9 (Tue) — solid day
+        (B_SMOOTHIE, L_TUNA,    D_PASTA,     S_COTTAGE, None),      # 2170 cal, 150g pro
+        # Day 8 (Wed) — skipped breakfast again, rushed morning
+        (None,       L_BOWL,    D_SALMON,    S_BAR,     EX_RUN),    # 1710 cal, 142g pro ← under cal
+
+        # ── WEEK 2: Building consistency, hitting targets ────────
+        # Day 7 (Thu) — committed to breakfast, strong day
+        (B_OMELET,   L_CHKSAND, D_STEAK,     S_SHAKE,   EX_CYCLE),  # 2310 cal, 180g pro
+        # Day 6 (Fri) — good day, eating out for lunch
+        (B_BURRITO,  L_CAESAR,  D_TACOS,     S_COTTAGE, None),      # 2180 cal, 168g pro
+        # Day 5 (Sat) — weekend but kept it reasonable, burger but no binge
+        (B_AVOTOAST, L_POKE,    D_BURGER,    S_BAR,     None),      # 2310 cal, 156g pro
+        # Day 4 (Sun) — lighter day but still logged everything
+        (B_YOGURT,   L_TUNA,    D_CHICKEN,   S_APPLE,   None),      # 2190 cal, 134g pro
+        # Day 3 (Mon) — strong start to the week
+        (B_OATMEAL,  L_WRAP,    D_SALMON,    S_SHAKE,   EX_LIFT),   # 2230 cal, 164g pro
+        # Day 2 (Tue) — great protein day
+        (B_OMELET,   L_BOWL,    D_STEAK,     S_COTTAGE, EX_RUN),    # 2280 cal, 170g pro
+        # Day 1 (Wed) — solid, consistent
+        (B_SMOOTHIE, L_CHKSAND, D_PASTA,     S_TRAIL,   None),      # 2270 cal, 148g pro
+        # Day 0 (Today/Thu) — on track so far
+        (B_BURRITO,  L_CAESAR,  D_STIRFRY,   S_BAR,     EX_CYCLE),  # 2240 cal, 172g pro
     ]
 
-    for day_offset in range(14, -1, -1):  # includes today (day_offset=0)
+    for day_offset in range(14, -1, -1):  # 14 down to 0 (today)
         day = today - timedelta(days=day_offset)
         date_str = day.strftime("%Y-%m-%d")
-        day_of_week = day.weekday()
-        is_weekend = day_of_week >= 5
+        plan_idx = 14 - day_offset  # 0 = day 14, ... 14 = day 0
+        bfast, lunch, dinner, snack, exercise = daily_plans[plan_idx]
 
-        # Skip breakfast sometimes (pattern for agent to detect — ~25% skip rate)
-        if random.random() > 0.25:
-            b = random.choice(breakfasts)
+        # Breakfast
+        if bfast is not None:
             _store.put(ns_meals, f"breakfast_{date_str}", {
-                "text": f"Ate {b[0]} for breakfast: {b[1]} cal, {b[2]}g protein, {b[3]}g carbs, {b[4]}g fat",
-                "food_name": b[0], "calories": b[1], "protein_g": b[2],
-                "carbs_g": b[3], "fat_g": b[4], "meal_type": b[5],
+                "text": f"Ate {bfast[0]} for breakfast: {bfast[1]} cal, {bfast[2]}g protein, {bfast[3]}g carbs, {bfast[4]}g fat",
+                "food_name": bfast[0], "calories": bfast[1], "protein_g": bfast[2],
+                "carbs_g": bfast[3], "fat_g": bfast[4], "meal_type": bfast[5],
                 "date": date_str, "timestamp": f"{date_str}T08:30:00",
             })
 
-        # Lunch (almost always)
-        l = random.choice(lunches)
+        # Lunch — always logged
         _store.put(ns_meals, f"lunch_{date_str}", {
-            "text": f"Ate {l[0]} for lunch: {l[1]} cal, {l[2]}g protein, {l[3]}g carbs, {l[4]}g fat",
-            "food_name": l[0], "calories": l[1], "protein_g": l[2],
-            "carbs_g": l[3], "fat_g": l[4], "meal_type": l[5],
+            "text": f"Ate {lunch[0]} for lunch: {lunch[1]} cal, {lunch[2]}g protein, {lunch[3]}g carbs, {lunch[4]}g fat",
+            "food_name": lunch[0], "calories": lunch[1], "protein_g": lunch[2],
+            "carbs_g": lunch[3], "fat_g": lunch[4], "meal_type": lunch[5],
             "date": date_str, "timestamp": f"{date_str}T12:30:00",
         })
 
-        # Dinner (always, but weekends tend to be higher calorie)
-        if is_weekend and random.random() > 0.4:
-            d = random.choice(dinners[-2:])  # burger/pizza on weekends
-        else:
-            d = random.choice(dinners[:-2])  # healthier on weekdays
+        # Dinner — always logged
         _store.put(ns_meals, f"dinner_{date_str}", {
-            "text": f"Ate {d[0]} for dinner: {d[1]} cal, {d[2]}g protein, {d[3]}g carbs, {d[4]}g fat",
-            "food_name": d[0], "calories": d[1], "protein_g": d[2],
-            "carbs_g": d[3], "fat_g": d[4], "meal_type": d[5],
+            "text": f"Ate {dinner[0]} for dinner: {dinner[1]} cal, {dinner[2]}g protein, {dinner[3]}g carbs, {dinner[4]}g fat",
+            "food_name": dinner[0], "calories": dinner[1], "protein_g": dinner[2],
+            "carbs_g": dinner[3], "fat_g": dinner[4], "meal_type": dinner[5],
             "date": date_str, "timestamp": f"{date_str}T19:00:00",
         })
 
-        # Snack (most days — protein targets need it)
-        if random.random() > 0.2:
-            s = random.choice(snacks)
+        # Snack
+        if snack is not None:
             _store.put(ns_meals, f"snack_{date_str}", {
-                "text": f"Ate {s[0]} for snack: {s[1]} cal, {s[2]}g protein, {s[3]}g carbs, {s[4]}g fat",
-                "food_name": s[0], "calories": s[1], "protein_g": s[2],
-                "carbs_g": s[3], "fat_g": s[4], "meal_type": s[5],
+                "text": f"Ate {snack[0]} for snack: {snack[1]} cal, {snack[2]}g protein, {snack[3]}g carbs, {snack[4]}g fat",
+                "food_name": snack[0], "calories": snack[1], "protein_g": snack[2],
+                "carbs_g": snack[3], "fat_g": snack[4], "meal_type": snack[5],
                 "date": date_str, "timestamp": f"{date_str}T15:30:00",
             })
 
-        # Exercise (3-4 times per week, mostly weekdays)
-        if not is_weekend and random.random() > 0.5:
-            ex = random.choice(exercises)
-            _store.put(ns_exercise, f"{ex[0]}_{date_str}", {
-                "text": f"{ex[0]} for {ex[1]} min: {ex[2]} cal burned",
-                "activity_name": ex[0], "duration_min": ex[1],
-                "calories_burned": ex[2],
+        # Exercise
+        if exercise is not None:
+            _store.put(ns_exercise, f"{exercise[0]}_{date_str}", {
+                "text": f"{exercise[0]} for {exercise[1]} min: {exercise[2]} cal burned",
+                "activity_name": exercise[0], "duration_min": exercise[1],
+                "calories_burned": exercise[2],
                 "date": date_str, "timestamp": f"{date_str}T07:00:00",
             })
 
