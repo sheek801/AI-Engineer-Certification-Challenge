@@ -114,7 +114,8 @@ async def render_dashboard(user_id: str):
     tdee = float(profile.get("tdee", 0)) if "tdee" in profile else 0
 
     # Today's meals
-    all_meals = list(_store.search((user_id, "consumption"), query="meal food", limit=500))
+    # No query → _list_search() returns ALL records (no semantic ranking)
+    all_meals = list(_store.search((user_id, "consumption"), limit=1000))
     today_meals = [m for m in all_meals if m.value.get("date") == today]
 
     total_cal = sum(m.value.get("calories", 0) for m in today_meals)
@@ -123,7 +124,7 @@ async def render_dashboard(user_id: str):
     total_fat = sum(m.value.get("fat_g", 0) for m in today_meals)
 
     # Today's exercise
-    all_exercises = list(_store.search((user_id, "exercise"), query="exercise activity", limit=500))
+    all_exercises = list(_store.search((user_id, "exercise"), limit=1000))
     today_exercises = [e for e in all_exercises if e.value.get("date") == today]
     total_burned = sum(e.value.get("calories_burned", 0) for e in today_exercises)
 
@@ -699,8 +700,8 @@ async def render_insights(user_id: str):
     profile_items = list(_store.search((user_id, "profile")))
     profile = {item.key: item.value.get("value", "") for item in profile_items}
 
-    all_meals = list(_store.search((user_id, "consumption"), query="meal food", limit=500))
-    all_exercises = list(_store.search((user_id, "exercise"), query="exercise activity", limit=500))
+    all_meals = list(_store.search((user_id, "consumption"), limit=1000))
+    all_exercises = list(_store.search((user_id, "exercise"), limit=1000))
 
     if not all_meals:
         await cl.Message(
