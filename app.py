@@ -11,7 +11,7 @@ Three flows:
 import os
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import chainlit as cl
 from langchain_core.messages import HumanMessage
@@ -71,6 +71,11 @@ async def chat_profiles(current_user: cl.User | None):
             name="Dashboard",
             markdown_description="View your nutrition dashboard with charts and stats",
             icon="https://cdn-icons-png.flaticon.com/512/1828/1828765.png",
+        ),
+        cl.ChatProfile(
+            name="Insights",
+            markdown_description="AI-powered analysis of your nutrition patterns and progress",
+            icon="https://cdn-icons-png.flaticon.com/512/2103/2103633.png",
         ),
     ]
 
@@ -444,6 +449,11 @@ async def start():
         await render_dashboard(user_id)
         return
 
+    # Insights profile — AI-generated nutrition analysis.
+    if chat_profile == "Insights":
+        await render_insights(user_id)
+        return
+
     # Check if this user has a complete profile already
     profile_complete = _check_profile_complete(user_id)
 
@@ -475,6 +485,17 @@ async def handle_message(message: cl.Message):
             ).send()
         else:
             await render_dashboard(user_id)
+        return
+
+    # ── Insights mode: regenerate analysis ──
+    if profile == "Insights":
+        await render_insights(user_id)
+        return
+
+    # ── Seed demo data command ────────────────────────────────────
+    if message.content.strip().lower() == "/seed":
+        _seed_demo_data(user_id)
+        await cl.Message(content="Demo data seeded! Switch to **Dashboard** or **Insights** to see it.").send()
         return
 
     # ── Onboarding form submission (from JS overlay) ──────────────
@@ -590,6 +611,224 @@ async def handle_message(message: cl.Message):
 
     ai_message = response["messages"][-1]
     await cl.Message(content=ai_message.content).send()
+
+
+async def render_insights(user_id: str):
+    """Generate an AI-powered nutrition insights report from all user data."""
+    if _store is None:
+        await cl.Message(content="Insights are loading... please wait a moment and try again.").send()
+        return
+
+    from collections import defaultdict
+
+    # Pull all data
+    profile_items = list(_store.search((user_id, "profile")))
+    profile = {item.key: item.value.get("value", "") for item in profile_items}
+
+    all_meals = list(_store.search((user_id, "consumption"), query="meal food", limit=500))
+    all_exercises = list(_store.search((user_id, "exercise"), query="exercise activity", limit=500))
+
+    if not all_meals:
+        await cl.Message(
+            content="## MacroMind Insights\n\n"
+                    "*No meal data yet!* Switch to **Chat** to start logging meals, "
+                    "then come back here for a personalized analysis of your nutrition patterns."
+        ).send()
+        return
+
+    # Build a structured data summary for the agent
+    days = defaultdict(list)
+    for m in all_meals:
+        d = m.value.get("date", "unknown")
+        days[d].append(m.value)
+
+    exercise_by_date = defaultdict(list)
+    for e in all_exercises:
+        d = e.value.get("date", "unknown")
+        exercise_by_date[d].append(e.value)
+
+    data_lines = []
+    data_lines.append(f"Total: {len(all_meals)} meals across {len(days)} days")
+    if profile.get("tdee"):
+        data_lines.append(f"TDEE target: {profile['tdee']} cal/day")
+    if profile.get("weight_kg"):
+        data_lines.append(f"Weight: {profile['weight_kg']} kg")
+    if profile.get("target_weight_kg") and profile["target_weight_kg"]:
+        data_lines.append(f"Target weight: {profile['target_weight_kg']} kg by {profile.get('target_date', '?')}")
+
+    for date in sorted(days.keys()):
+        meals = days[date]
+        day_cal = sum(m.get("calories", 0) for m in meals)
+        day_pro = sum(m.get("protein_g", 0) for m in meals)
+        day_carb = sum(m.get("carbs_g", 0) for m in meals)
+        day_fat = sum(m.get("fat_g", 0) for m in meals)
+        meal_types = [m.get("meal_type", "?") for m in meals]
+        food_names = [m.get("food_name", "?") for m in meals]
+
+        day_ex = exercise_by_date.get(date, [])
+        day_burned = sum(e.get("calories_burned", 0) for e in day_ex)
+
+        line = (f"  {date}: {round(day_cal)} cal, {round(day_pro)}g pro, "
+                f"{round(day_carb)}g carb, {round(day_fat)}g fat | "
+                f"meals: {', '.join(meal_types)} | foods: {', '.join(food_names)}")
+        if day_burned > 0:
+            line += f" | exercise: {round(day_burned)} cal burned"
+        data_lines.append(line)
+
+    data_summary = "\n".join(data_lines)
+
+    insights_prompt = (
+        f"Here is my complete nutrition data:\n{data_summary}\n\n"
+        f"Generate a personalized nutrition insights report with these sections:\n"
+        f"1. **Eating Patterns** — timing, consistency, weekend vs weekday trends, skipped meals\n"
+        f"2. **Macro Balance** — protein/carbs/fat distribution, daily protein consistency\n"
+        f"3. **What's Working** — positive trends, good habits, strengths\n"
+        f"4. **Areas to Improve** — specific, actionable suggestions with numbers\n"
+        f"5. **This Week's Focus** — 2-3 concrete goals for the coming week\n\n"
+        f"Keep it engaging, concise, and use bullet points. Reference specific days and foods from the data."
+    )
+
+    await cl.Message(content="## MacroMind Insights\n\n*Analyzing your nutrition data...*").send()
+
+    try:
+        config = {"configurable": {"thread_id": f"insights_{user_id}"}}
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                agent.invoke,
+                {"messages": [HumanMessage(content=insights_prompt)], "user_id": user_id},
+                config,
+            ),
+            timeout=90,
+        )
+        ai_msg = response["messages"][-1]
+        await cl.Message(content=ai_msg.content).send()
+    except Exception as e:
+        logger.error(f"Insights generation failed: {e}")
+        await cl.Message(
+            content="Could not generate insights right now. Try again in a moment."
+        ).send()
+
+
+def _seed_demo_data(user_id: str):
+    """Pre-populate 14 days of realistic meal + exercise data for demo purposes.
+
+    Only runs if the user has zero consumption data. Safe to call multiple times.
+    """
+    if _store is None:
+        return
+
+    # Check if user already has data
+    existing = list(_store.search((user_id, "consumption"), query="meal", limit=1))
+    if existing:
+        return  # Don't overwrite real data
+
+    import random
+    random.seed(42)  # Reproducible demo data
+
+    today = datetime.now()
+    ns_meals = (user_id, "consumption")
+    ns_exercise = (user_id, "exercise")
+
+    # Realistic meal templates: (food_name, calories, protein, carbs, fat, meal_type)
+    breakfasts = [
+        ("scrambled eggs with toast", 380, 22, 28, 18, "breakfast"),
+        ("Greek yogurt with granola and berries", 350, 20, 45, 10, "breakfast"),
+        ("oatmeal with banana and peanut butter", 420, 14, 58, 16, "breakfast"),
+        ("avocado toast with egg", 390, 16, 32, 22, "breakfast"),
+        ("protein smoothie with spinach", 310, 30, 35, 6, "breakfast"),
+        ("bagel with cream cheese", 360, 12, 52, 14, "breakfast"),
+    ]
+    lunches = [
+        ("grilled chicken Caesar salad", 480, 42, 18, 26, "lunch"),
+        ("turkey and avocado wrap", 520, 35, 42, 22, "lunch"),
+        ("chicken burrito bowl", 620, 38, 65, 20, "lunch"),
+        ("tuna salad sandwich", 450, 32, 38, 18, "lunch"),
+        ("poke bowl with brown rice", 550, 30, 55, 20, "lunch"),
+        ("grilled chicken sandwich", 510, 36, 40, 22, "lunch"),
+    ]
+    dinners = [
+        ("salmon with brown rice and broccoli", 580, 40, 48, 20, "dinner"),
+        ("grilled steak with sweet potato", 650, 45, 40, 28, "dinner"),
+        ("chicken stir-fry with vegetables", 520, 38, 42, 18, "dinner"),
+        ("pasta with marinara and ground turkey", 600, 32, 68, 18, "dinner"),
+        ("shrimp tacos with slaw", 480, 28, 42, 20, "dinner"),
+        ("baked chicken thighs with roasted vegetables", 560, 42, 30, 24, "dinner"),
+        ("burger and fries (dining out)", 920, 38, 72, 48, "dinner"),
+        ("pizza night (2 slices)", 680, 24, 72, 30, "dinner"),
+    ]
+    snacks = [
+        ("protein bar", 220, 20, 24, 8, "snack"),
+        ("apple with almond butter", 250, 6, 28, 14, "snack"),
+        ("trail mix handful", 200, 6, 18, 14, "snack"),
+        ("string cheese and crackers", 180, 10, 16, 8, "snack"),
+        ("protein shake", 160, 25, 8, 3, "snack"),
+    ]
+    exercises = [
+        ("running", 30, 300),
+        ("cycling", 45, 350),
+        ("walking", 40, 180),
+        ("weight training", 50, 280),
+        ("yoga", 30, 120),
+    ]
+
+    for day_offset in range(14, 0, -1):
+        day = today - timedelta(days=day_offset)
+        date_str = day.strftime("%Y-%m-%d")
+        day_of_week = day.weekday()
+        is_weekend = day_of_week >= 5
+
+        # Skip breakfast sometimes (pattern for agent to detect)
+        if random.random() > 0.35:
+            b = random.choice(breakfasts)
+            _store.put(ns_meals, f"breakfast_{date_str}", {
+                "text": f"Ate {b[0]} for breakfast: {b[1]} cal, {b[2]}g protein, {b[3]}g carbs, {b[4]}g fat",
+                "food_name": b[0], "calories": b[1], "protein_g": b[2],
+                "carbs_g": b[3], "fat_g": b[4], "meal_type": b[5],
+                "date": date_str, "timestamp": f"{date_str}T08:30:00",
+            })
+
+        # Lunch (almost always)
+        l = random.choice(lunches)
+        _store.put(ns_meals, f"lunch_{date_str}", {
+            "text": f"Ate {l[0]} for lunch: {l[1]} cal, {l[2]}g protein, {l[3]}g carbs, {l[4]}g fat",
+            "food_name": l[0], "calories": l[1], "protein_g": l[2],
+            "carbs_g": l[3], "fat_g": l[4], "meal_type": l[5],
+            "date": date_str, "timestamp": f"{date_str}T12:30:00",
+        })
+
+        # Dinner (always, but weekends tend to be higher calorie)
+        if is_weekend and random.random() > 0.4:
+            d = random.choice(dinners[-2:])  # burger/pizza on weekends
+        else:
+            d = random.choice(dinners[:-2])  # healthier on weekdays
+        _store.put(ns_meals, f"dinner_{date_str}", {
+            "text": f"Ate {d[0]} for dinner: {d[1]} cal, {d[2]}g protein, {d[3]}g carbs, {d[4]}g fat",
+            "food_name": d[0], "calories": d[1], "protein_g": d[2],
+            "carbs_g": d[3], "fat_g": d[4], "meal_type": d[5],
+            "date": date_str, "timestamp": f"{date_str}T19:00:00",
+        })
+
+        # Snack (sometimes)
+        if random.random() > 0.4:
+            s = random.choice(snacks)
+            _store.put(ns_meals, f"snack_{date_str}", {
+                "text": f"Ate {s[0]} for snack: {s[1]} cal, {s[2]}g protein, {s[3]}g carbs, {s[4]}g fat",
+                "food_name": s[0], "calories": s[1], "protein_g": s[2],
+                "carbs_g": s[3], "fat_g": s[4], "meal_type": s[5],
+                "date": date_str, "timestamp": f"{date_str}T15:30:00",
+            })
+
+        # Exercise (3-4 times per week, mostly weekdays)
+        if not is_weekend and random.random() > 0.5:
+            ex = random.choice(exercises)
+            _store.put(ns_exercise, f"{ex[0]}_{date_str}", {
+                "text": f"{ex[0]} for {ex[1]} min: {ex[2]} cal burned",
+                "activity_name": ex[0], "duration_min": ex[1],
+                "calories_burned": ex[2],
+                "date": date_str, "timestamp": f"{date_str}T07:00:00",
+            })
+
+    logger.info(f"Seeded 14 days of demo data for user {user_id}")
 
 
 def _save_onboarding_from_overlay(payload: dict, user_id: str) -> str | None:
