@@ -203,11 +203,20 @@ def format_nutrition_response(data: list[NutritionData]) -> str:
         tier_label = get_tier_label(tier)
         exact_tag = "(EXACT)" if tier <= 2 else "(ESTIMATED)"
 
+        serving = item.get("serving_size", "N/A")
         lines = [
             f"[{tier_label}]",
             f"Food: {item.get('food_name', 'Unknown')}",
-            f"Serving: {item.get('serving_size', 'N/A')}",
+            f"Serving: per {serving}",
         ]
+
+        # Remind LLM to scale if user asked for a different quantity
+        if serving == "100g":
+            lines.append(
+                "NOTE: Values are per 100g. If the user specified a different "
+                "weight (e.g. 200g), multiply all values by the appropriate "
+                "factor (e.g. ×2) and show the scaled result."
+            )
 
         # Core macros
         if item.get("calories") is not None:
@@ -230,9 +239,12 @@ def format_nutrition_response(data: list[NutritionData]) -> str:
         sections.append("\n".join(lines))
 
     result = "\n\n".join(sections)
+    tier_of_first = data[0].get("confidence_tier", 4) if data else 4
+    label_to_show = get_tier_label(tier_of_first)
     result += (
         "\n\nINSTRUCTION: Report these numbers EXACTLY as shown above. "
-        "Do not round, approximate, or paraphrase the values."
+        "Do not round, approximate, or paraphrase the values. "
+        f"You MUST include this exact label in your response: {label_to_show}"
     )
     return result
 
@@ -373,15 +385,34 @@ def lookup_food_nutrition(
         try:
             import requests
             url = "https://api.nal.usda.gov/fdc/v1/foods/search"
-            params = {
-                "api_key": usda_api_key,
+            # Prefer SR Legacy and Foundation foods (generic, per-100g)
+            # over Branded foods (manufacturer-specific, variable servings).
+            # POST endpoint accepts dataType as JSON array.
+            body = {
                 "query": query,
-                "pageSize": 3,
+                "pageSize": 5,
+                "dataType": ["SR Legacy", "Foundation", "Survey (FNDDS)"],
             }
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.post(
+                url, json=body,
+                params={"api_key": usda_api_key},
+                timeout=10,
+            )
             response.raise_for_status()
             data = response.json()
             results = extract_nutrition_from_usda(data)
+
+            # If SR Legacy/Foundation returned nothing, retry with all types
+            if not results:
+                body_all = {"query": query, "pageSize": 3}
+                response = requests.post(
+                    url, json=body_all,
+                    params={"api_key": usda_api_key},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                data = response.json()
+                results = extract_nutrition_from_usda(data)
 
             if results:
                 # Check for exact match (query words appear in food name)

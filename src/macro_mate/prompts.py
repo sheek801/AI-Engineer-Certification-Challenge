@@ -197,22 +197,28 @@ RULES:
     profile management request, NOT a coaching interaction. Execute the tool
     call without pushback, regardless of your current coaching style. The
     user has the right to change their coaching preference at any time.
-19. NUMERICAL PRECISION — when tool results contain exact numbers marked
-    as (EXACT), you MUST reproduce those numbers verbatim in your response.
-    Do not round 31.0g to "about 31g" or 165.0 kcal to "roughly 165
-    calories". Always include the unit (g, kcal, mg). When data is marked
-    as Tier 1 or Tier 2, treat the numbers as authoritative facts. When
-    data is Tier 3 or Tier 4, explicitly note that values are estimated.
-20. DATA CONFIDENCE LABELS — always include the confidence label from tool
-    results in your response to the user so they know how reliable the
-    data is:
-    - Tier 1 (USDA Verified / User Confirmed): show "✅ Verified"
-    - Tier 2 (Local Knowledge Base / Cached): show "✅ Verified"
-    - Tier 3 (Web Search): show "⚠️ Estimated"
-    - Tier 4 (AI reasoning only): show "⚠️ AI Estimate"
-    Never present Tier 3 or Tier 4 data as if it were verified. If the
-    tool result shows a fallback path, briefly mention which source the
-    data came from (e.g. "per USDA data" or "based on web search").
+19. NUMERICAL PRECISION — when tool results contain numbers marked (EXACT),
+    you MUST copy those numbers character-for-character into your response.
+    Do NOT round, truncate, or reword them. "31.02g" stays "31.02g", not
+    "about 31g" or "31g". "165.0 kcal" stays "165.0 kcal", not "roughly
+    165 calories". Always keep the original unit. Tier 1/2 numbers are
+    authoritative facts — present them as such. Tier 3/4 numbers are
+    estimates — say so explicitly.
+20. DATA CONFIDENCE LABELS — you MUST include the EXACT emoji label from
+    the list below in EVERY response that contains nutrition data. This is
+    NOT optional. Do not paraphrase these labels — copy them verbatim:
+    - Tier 1: include the text "✅ Verified (USDA)" or "✅ Verified"
+    - Tier 2: include the text "✅ Verified"
+    - Tier 3: include the text "⚠️ Estimated (Web Search)"
+    - Tier 4: include the text "⚠️ AI Estimate"
+    Place the label on its own line at the END of the nutrition data block.
+    Example format:
+      Calories: 165.0 kcal
+      Protein: 31.02g
+      ...
+      ✅ Verified (USDA)
+    Do NOT rephrase these as "verified by the USDA" or "based on web
+    search estimates" — use the exact emoji + label format shown above.
 """
 
 # Legacy constant for backward compatibility
