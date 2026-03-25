@@ -24,10 +24,14 @@ from ragas.metrics import (
     ResponseRelevancy,
 )
 
-from macro_mate.config import LLM_MODEL
+from macro_mate.config import LLM_MODEL, COHERE_API_KEY
 from macro_mate.data_loader import load_all_documents
 from macro_mate.vector_store import create_vector_store
-from macro_mate.retrievers import create_dense_retriever, create_ensemble_retriever
+from macro_mate.retrievers import (
+    create_dense_retriever,
+    create_ensemble_retriever,
+    create_reranked_ensemble_retriever,
+)
 from macro_mate.eval_dataset import TESTSET_PATH, EVAL_DIR
 
 
@@ -53,6 +57,13 @@ def build_retriever(mode: str):
 
     if mode == "dense":
         return create_dense_retriever(vector_store)
+    elif mode == "reranked":
+        if not COHERE_API_KEY:
+            print("[Eval] WARNING: COHERE_API_KEY not set. Falling back to ensemble.")
+            return create_ensemble_retriever(vector_store, documents)
+        return create_reranked_ensemble_retriever(
+            vector_store, documents, COHERE_API_KEY
+        )
     else:
         return create_ensemble_retriever(vector_store, documents)
 
@@ -115,9 +126,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate MacroMind retrieval")
     parser.add_argument(
         "--mode",
-        choices=["dense", "ensemble"],
+        choices=["dense", "ensemble", "reranked"],
         default="dense",
-        help="Retriever mode: 'dense' for baseline, 'ensemble' for improved",
+        help="Retriever mode: 'dense' for baseline, 'ensemble' for improved, 'reranked' for Cohere reranked",
     )
     args = parser.parse_args()
     run_evaluation(args.mode)

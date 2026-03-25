@@ -1,4 +1,4 @@
-"""Agent tools — the seven capabilities that make MacroMind useful.
+"""Agent tools — the eight capabilities that make MacroMind useful.
 
 Each tool is a function decorated with @tool. The agent decides WHEN to
 call them based on the user's message and the tool docstrings.
@@ -14,17 +14,24 @@ from langchain_tavily import TavilySearch
 from langgraph.store.base import BaseStore
 
 from macro_mate.utils import calculate_tdee
+from macro_mate.nutrition_pipeline import (
+    extract_nutrition_from_text,
+    format_nutrition_response,
+    lookup_food_nutrition,
+    cache_nutrition_data,
+    get_tier_label,
+)
 
 
 def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
-    """Factory that builds all 7 agent tools.
+    """Factory that builds all 8 agent tools.
 
     Args:
         retriever: The EnsembleRetriever from retrievers.py.
         store: The persistent store (PersistentStore or any BaseStore).
 
     Returns:
-        A list of 7 tool functions to bind to the LLM.
+        A list of 8 tool functions to bind to the LLM.
     """
 
     # ═══════════════════════════════════════════════════════════════════
@@ -46,11 +53,31 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         docs = retriever.invoke(query)
         if not docs:
             return "No relevant information found in the knowledge base."
+
         results = []
+        structured_items = []
+
         for i, doc in enumerate(docs):
             source = doc.metadata.get("source_type", "unknown")
+            # Try to extract structured nutrition data from the document
+            extracted = extract_nutrition_from_text(
+                doc.page_content, source="local_kb", tier=2
+            )
+            if extracted:
+                extracted["food_name"] = extracted["food_name"] or query
+                structured_items.append(extracted)
+
             results.append(f"[Source {i+1} ({source})]: {doc.page_content}")
-        return "\n\n".join(results)
+
+        # If structured data was found, prepend it for precision
+        output = ""
+        if structured_items:
+            output += format_nutrition_response(structured_items) + "\n\n"
+            output += "--- Raw Knowledge Base Results ---\n\n"
+
+        output += "\n\n".join(results)
+        output += f"\n\n[Confidence: {get_tier_label(2)}]"
+        return output
 
     # ═══════════════════════════════════════════════════════════════════
     # Tool 2 — Web search (Tavily)
@@ -81,16 +108,31 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         if not results:
             return "No web results found."
 
+        # Try to extract structured nutrition data from web results
+        structured_items = []
         formatted = []
         for i, r in enumerate(results[:3]):
             if isinstance(r, dict):
+                content = r.get("content", "N/A")
                 formatted.append(
-                    f"[Web Source {i+1}]: {r.get('content', 'N/A')}\n"
+                    f"[Web Source {i+1}]: {content}\n"
                     f"URL: {r.get('url', 'N/A')}"
                 )
+                extracted = extract_nutrition_from_text(content, source="web", tier=3)
+                if extracted:
+                    extracted["food_name"] = extracted["food_name"] or query
+                    structured_items.append(extracted)
             else:
                 formatted.append(f"[Web Source {i+1}]: {str(r)}")
-        return "\n\n".join(formatted)
+
+        output = ""
+        if structured_items:
+            output += format_nutrition_response(structured_items) + "\n\n"
+            output += "--- Raw Web Results ---\n\n"
+
+        output += "\n\n".join(formatted)
+        output += f"\n\n[Confidence: {get_tier_label(3)}]"
+        return output
 
     # ═══════════════════════════════════════════════════════════════════
     # Tool 3 — Log food consumption
@@ -165,9 +207,23 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
             "count": count, "last_log_date": today_str, "longest": longest,
         })
 
+        # ── Cache the confirmed nutrition data for future lookups ──
+        cache_nutrition_data(store, food_name, {
+            "food_name": food_name,
+            "calories": calories,
+            "protein_g": protein_g,
+            "carbs_g": carbs_g,
+            "fat_g": fat_g,
+            "fiber_g": None,
+            "serving_size": "user-reported",
+            "source": "user_confirmed",
+            "confidence_tier": 1,
+        }, user_id=user_id)
+
         streak_msg = f" | Streak: {count} day(s)" if count > 1 else ""
         return (f"Logged {food_name} ({meal_type}): {calories} cal, "
-                f"{protein_g}g protein, {carbs_g}g carbs, {fat_g}g fat{streak_msg}")
+                f"{protein_g}g protein, {carbs_g}g carbs, {fat_g}g fat{streak_msg}"
+                f"\n[Confidence: {get_tier_label(1)} — User Confirmed]")
 
     # ═══════════════════════════════════════════════════════════════════
     # Tool 4 — Manage user profile
@@ -209,7 +265,7 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
                 return "No profile found. Set fields with action='set'."
             lines = [f"  {item.key}: {item.value.get('value', item.value)}"
                      for item in items]
-            return "User profile:\n" + "\n".join(lines)
+            return "User profile:\n" + "\n".join(lines) + f"\n[Confidence: {get_tier_label(1)} — User Data]"
 
         elif action == "set":
             # LOGIC: Each profile field is stored as its own key.
@@ -255,7 +311,8 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
             store.put(namespace, "tdee", {"value": str(round(tdee))})
 
             return (f"TDEE: {round(tdee)} calories/day "
-                    f"(BMR: {round(bmr)}, activity: {activity})")
+                    f"(BMR: {round(bmr)}, activity: {activity})"
+                    f"\n[Confidence: {get_tier_label(1)} — Calculated from User Data]")
 
         return "Unknown action. Use 'get', 'set', or 'tdee'."
 
@@ -321,6 +378,7 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         return (
             f"Logged {activity_name} ({duration_minutes} min, "
             f"{round(calories_burned)} cal burned){budget_msg}"
+            f"\n[Confidence: {get_tier_label(1)} — User Reported]"
         )
 
     # ═══════════════════════════════════════════════════════════════════
@@ -396,6 +454,7 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
             if count > 0:
                 summary += f"\n  Streak: {count} day(s) (Best: {longest})"
 
+        summary += f"\n[Confidence: {get_tier_label(1)} — Aggregated from User Logs]"
         return summary
 
     # ═══════════════════════════════════════════════════════════════════
@@ -613,20 +672,26 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
                 + "\n".join(ex_lines)
             )
 
+        sections.append(f"\n[Confidence: {get_tier_label(1)} — Aggregated from User Logs]")
         return "\n".join(sections)
 
     # ═══════════════════════════════════════════════════════════════════
-    # Tool 7 — USDA FoodData Central lookup
+    # Tool 7 — USDA FoodData Central lookup (with fallback chain)
     # ═══════════════════════════════════════════════════════════════════
 
     @tool
-    def search_usda_foods(query: str) -> str:
-        """Search the USDA FoodData Central database for detailed,
-        verified nutrition information about any food item.
+    def search_usda_foods(query: str, user_id: str = "") -> str:
+        """Look up detailed, verified nutrition information for any food item.
+
+        Uses a multi-source fallback chain for maximum accuracy:
+          1. USDA FoodData Central (Tier 1 — verified)
+          2. Previously confirmed food cache (Tier 2 — verified)
+          3. Web search (Tier 3 — estimated)
+        Each response is labeled with its data source and confidence tier.
 
         Use this tool when:
         - The user asks for exact macros of a specific food (not a restaurant item)
-        - You need precise, USDA-verified nutrition data
+        - You need precise, verified nutrition data
         - The knowledge base doesn't have detailed macros for a food
 
         Do NOT use for restaurant menu items (use search_nutrition_knowledge
@@ -635,67 +700,18 @@ def create_tools(retriever: EnsembleRetriever, store: BaseStore) -> list:
         Args:
             query: Name of the food to search for (e.g. "chicken breast",
                    "banana", "brown rice").
+            user_id: The user's ID (for personalised cache lookups).
         """
-        import requests
         from macro_mate.config import USDA_API_KEY
 
-        if not USDA_API_KEY:
-            return "USDA API key not configured. Set USDA_API_KEY in .env."
+        return lookup_food_nutrition(
+            query=query,
+            store=store,
+            usda_api_key=USDA_API_KEY,
+            user_id=user_id or None,
+        )
 
-        url = "https://api.nal.usda.gov/fdc/v1/foods/search"
-        params = {
-            "api_key": USDA_API_KEY,
-            "query": query,
-            "pageSize": 3,
-        }
-
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-        except Exception as e:
-            return f"Error querying USDA API: {e}"
-
-        foods = data.get("foods", [])
-        if not foods:
-            return f"No results found for '{query}' in USDA FoodData Central."
-
-        results = []
-        for i, food in enumerate(foods[:3]):
-            name = food.get("description", "Unknown")
-            nutrients = {}
-            for nutrient in food.get("foodNutrients", []):
-                n_name = nutrient.get("nutrientName", "")
-                n_value = nutrient.get("value", 0)
-                n_unit = nutrient.get("unitName", "")
-                if "Energy" in n_name and n_unit == "KCAL":
-                    nutrients["calories"] = f"{n_value} kcal"
-                elif "Protein" in n_name:
-                    nutrients["protein"] = f"{n_value}g"
-                elif "Carbohydrate" in n_name:
-                    nutrients["carbs"] = f"{n_value}g"
-                elif n_name == "Total lipid (fat)":
-                    nutrients["fat"] = f"{n_value}g"
-                elif "Fiber" in n_name:
-                    nutrients["fiber"] = f"{n_value}g"
-                elif "Sugars, total" in n_name:
-                    nutrients["sugar"] = f"{n_value}g"
-                elif "Sodium" in n_name:
-                    nutrients["sodium"] = f"{n_value}mg"
-
-            serving = food.get("servingSize", "")
-            serving_unit = food.get("servingSizeUnit", "")
-            serving_str = f" (per {serving}{serving_unit})" if serving else " (per 100g)"
-
-            nutrient_lines = [f"    {k}: {v}" for k, v in nutrients.items()]
-            results.append(
-                f"[USDA Result {i+1}]: {name}{serving_str}\n"
-                + "\n".join(nutrient_lines)
-            )
-
-        return "\n\n".join(results)
-
-    # ─── Return all 7 tools ──────────────────────────────────────────
+    # ─── Return all 8 tools ──────────────────────────────────────────
 
     return [
         search_nutrition_knowledge,

@@ -27,6 +27,10 @@ dependencies = [
     "langchain-tavily",           # TavilySearch for web search tool
     "requests",                   # HTTP client for USDA FoodData Central API
 
+    # --- Reranking ---
+    "cohere",                     # Cohere API client
+    "langchain-cohere",           # CohereRerank for retrieval reranking
+
     # --- Data loading ---
     "pypdf",                      # PyPDFLoader for PDF ingestion
     "pandas",                     # CSV loading + filtering

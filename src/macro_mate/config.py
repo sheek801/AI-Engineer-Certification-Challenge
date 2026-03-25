@@ -18,6 +18,7 @@ OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
 TAVILY_API_KEY: str = os.environ.get("TAVILY_API_KEY", "")
 LANGSMITH_API_KEY: str = os.environ.get("LANGSMITH_API_KEY", "")
 USDA_API_KEY: str = os.environ.get("USDA_API_KEY", "")
+COHERE_API_KEY: str = os.environ.get("COHERE_API_KEY", "")
 
 # ── LangSmith tracing ────────────────────────────────────────────────
 # The SDK reads these directly from os.environ, not from Python variables.

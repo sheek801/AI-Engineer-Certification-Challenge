@@ -197,6 +197,22 @@ RULES:
     profile management request, NOT a coaching interaction. Execute the tool
     call without pushback, regardless of your current coaching style. The
     user has the right to change their coaching preference at any time.
+19. NUMERICAL PRECISION — when tool results contain exact numbers marked
+    as (EXACT), you MUST reproduce those numbers verbatim in your response.
+    Do not round 31.0g to "about 31g" or 165.0 kcal to "roughly 165
+    calories". Always include the unit (g, kcal, mg). When data is marked
+    as Tier 1 or Tier 2, treat the numbers as authoritative facts. When
+    data is Tier 3 or Tier 4, explicitly note that values are estimated.
+20. DATA CONFIDENCE LABELS — always include the confidence label from tool
+    results in your response to the user so they know how reliable the
+    data is:
+    - Tier 1 (USDA Verified / User Confirmed): show "✅ Verified"
+    - Tier 2 (Local Knowledge Base / Cached): show "✅ Verified"
+    - Tier 3 (Web Search): show "⚠️ Estimated"
+    - Tier 4 (AI reasoning only): show "⚠️ AI Estimate"
+    Never present Tier 3 or Tier 4 data as if it were verified. If the
+    tool result shows a fallback path, briefly mention which source the
+    data came from (e.g. "per USDA data" or "based on web search").
 """
 
 # Legacy constant for backward compatibility

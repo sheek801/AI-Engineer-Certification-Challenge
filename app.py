@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 from macro_mate.data_loader import load_all_documents
 from macro_mate.vector_store import create_vector_store
-from macro_mate.retrievers import create_ensemble_retriever
+from macro_mate.retrievers import create_ensemble_retriever, create_reranked_ensemble_retriever
 from macro_mate.memory import create_checkpointer, create_memory_store
 from macro_mate.tools import create_tools
 from macro_mate.agent import build_graph
@@ -455,9 +455,19 @@ async def _ensure_agent():
     global agent, _store
     if agent is not None:
         return
+    from macro_mate.config import COHERE_API_KEY
+
     documents = load_all_documents()
     vector_store = create_vector_store(documents)
-    retriever = create_ensemble_retriever(vector_store, documents)
+
+    # Use Cohere reranking if API key is available, otherwise plain ensemble
+    if COHERE_API_KEY:
+        retriever = create_reranked_ensemble_retriever(
+            vector_store, documents, COHERE_API_KEY
+        )
+    else:
+        retriever = create_ensemble_retriever(vector_store, documents)
+
     checkpointer = create_checkpointer()
     _store = create_memory_store()
     tools = create_tools(retriever, _store)
